@@ -41,10 +41,13 @@ check('the header states how many were scanned', /\d{3,} scanned/.test(header), 
 const laneText = await laneChips.allInnerTexts()
 check('every lane carries its own count', laneText.every((t) => /\d/.test(t)), laneText.join(' | ').slice(0, 90))
 
-const firstLaneCount = await rows().count()
+// Counting rendered rows does not work here: employers are collapsed, so two
+// very different lanes can show the same number of open rows. The header's own
+// total is the number that means something.
+const firstLaneCount = await showing()
 await laneChips.nth(1).click()
-await page.waitForTimeout(400)
-const secondLaneCount = await rows().count()
+await page.waitForTimeout(500)
+const secondLaneCount = await showing()
 check('switching lane changes what is listed', firstLaneCount !== secondLaneCount, `${firstLaneCount} -> ${secondLaneCount}`)
 
 // A phone that opened the app before the lanes changed must still receive the
