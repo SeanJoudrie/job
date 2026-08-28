@@ -30,14 +30,20 @@ await page.waitForTimeout(1200)
 const topText = await page.locator('main').innerText()
 check('the app opens on Top', /Best across every lane/.test(topText))
 
+// Read the score from its own element, never off the row's concatenated text.
+// `textContent` runs the score straight into the title, and GBH is currently
+// posting a "2027 FRONTLINE/CUNY-Newmark Journalism School Reporting Fellow" —
+// so a row scoring 7.1 read as 7.12027, and a correctly ordered list failed
+// this check. The list was right; the way it was being read was not.
 const topRows = await page.evaluate(() =>
   [...document.querySelectorAll('li:has(> div > input) button[aria-expanded]')].slice(0, 20).map((b) => {
-    const t = (b.textContent ?? '').trim()
-    return { score: Number(t.match(/^([\d.]+)/)?.[1]), line: t.replace(/\s+/g, ' ').slice(0, 80) }
+    const score = Number((b.querySelector('span')?.textContent ?? '').trim())
+    return { score, line: (b.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 80) }
   }).filter((r) => Number.isFinite(r.score)))
 check('Top lists scored jobs', topRows.length > 5, `${topRows.length} rows`)
 check('and they descend by score', topRows.every((r, i) => i === 0 || topRows[i - 1].score >= r.score),
-  topRows.slice(0, 6).map((r) => r.score).join(' '))
+  // Every score, not the first six: the break is never in the first six.
+  topRows.map((r) => r.score).join(' '))
 
 // One employer posting a role once per shift must not own the list.
 // Read the employer from the row's own meta line. An earlier version matched
@@ -123,7 +129,7 @@ check('the page is light regardless of the phone theme', isLight, bg)
 // of the list is exactly where attention goes.
 const capped = await page.evaluate(() => {
   const rows = [...document.querySelectorAll('li:has(> div > input) button[aria-expanded]')]
-  return rows.slice(0, 25).map((b) => Number((b.textContent ?? '').trim().match(/^([\d.]+)/)?.[1])).filter(Number.isFinite)
+  return rows.slice(0, 25).map((b) => Number((b.querySelector('span')?.textContent ?? '').trim())).filter(Number.isFinite)
 })
 check('top-of-list scores exist and are bounded', capped.length > 0 && capped.every((n) => n <= 10), capped.slice(0, 6).join(' '))
 
