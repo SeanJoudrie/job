@@ -3,6 +3,7 @@ import type { Job } from '../types'
 import { boardCount } from '../lib/dedupe'
 import { formatPay } from '../lib/pay'
 import { gapsFor, type Profile } from '../lib/requirements'
+import { easeOf } from '../lib/ease'
 import { axesFor, scoreOf, variantFor, type Weights } from '../lib/score'
 import { Bar, Chip } from './ui'
 
@@ -26,7 +27,7 @@ function snippet(job: Job, query: string): string | null {
 }
 
 export function JobRow({
-  job, profile, weights, applied, selected, expanded, deadReq, onToggleExpand, onToggleSelect, onApply, description, query = '',
+  job, profile, weights, applied, selected, expanded, deadReq, onToggleExpand, onToggleSelect, onApply, description, query = '', showCompany = true,
 }: {
   job: Job
   profile: Profile
@@ -40,6 +41,8 @@ export function JobRow({
   onApply: (next: boolean) => void
   description?: string
   query?: string
+  /** Off when the list is grouped by employer — the group header already says it. */
+  showCompany?: boolean
 }) {
   const [showAll, setShowAll] = useState(false)
   const axes = axesFor(job, profile)
@@ -48,6 +51,7 @@ export function JobRow({
   const shown = showAll ? gaps : gaps.filter((g) => g.verdict !== 'unstated').slice(0, 8)
   const boards = boardCount(job)
   const match = snippet(job, query)
+  const ease = easeOf(job)
 
   return (
     <li className="border-b line">
@@ -67,8 +71,12 @@ export function JobRow({
             <span className="min-w-0 flex-1 truncate text-sm font-medium">{job.title}</span>
           </div>
           <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs muted">
-            <span>{job.company}</span>
-            <span aria-hidden>·</span>
+            {showCompany && (
+              <>
+                <span>{job.company}</span>
+                <span aria-hidden>·</span>
+              </>
+            )}
             <span>{job.remote ? 'remote' : job.miles !== null ? `${Math.round(job.miles)} mi` : 'location unclear'}</span>
             <span aria-hidden>·</span>
             <span style={{ color: job.pay ? undefined : 'var(--faint)' }}>{formatPay(job.pay)}</span>
@@ -85,6 +93,12 @@ export function JobRow({
       {expanded && (
         <div className="space-y-3 px-3 pb-4 pl-9">
           <div className="flex flex-wrap gap-x-4 gap-y-1">
+            <span className="flex items-center gap-1.5 text-[11px] muted">
+              <span className="w-24 shrink-0">Gettable</span>
+              <Bar value={ease.score} />
+              <span className="tabular w-5">{ease.score}</span>
+              <span className="faint">{ease.why.join(', ') || 'nothing either way'}</span>
+            </span>
             {axes.map((a) => (
               <span key={a.id} className="flex items-center gap-1.5 text-[11px] muted">
                 <span className="w-24 shrink-0">{a.label}</span>

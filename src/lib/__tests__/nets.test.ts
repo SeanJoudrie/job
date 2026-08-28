@@ -7,7 +7,7 @@ const keyOf = (j: Job) => `${j.company}::${j.title}`
 
 let n = 0
 const job = (over: Partial<Job> = {}): Job => ({
-  id: `j${n++}`, source: 'greenhouse', company: 'Acme', title: 'Program Coordinator',
+  id: `j${n++}`, source: 'greenhouse', sector: 'tech', company: 'Acme', title: 'Program Coordinator',
   url: 'https://x/1', descText: '', locations: [], miles: 10, remote: false, pay: null,
   requirements: [], families: [], postedAt: '2026-08-20', firstSeen: '2026-08-20',
   lastSeen: '2026-08-28', scans: 1, reposts: 0, alsoOn: [], linkOk: true, ...over,
@@ -115,13 +115,21 @@ describe('every rule can explain itself', () => {
 })
 
 describe('the lanes', () => {
-  it('ships the ones the spec names', () => {
+  it('ships a lane for every area named as a genuine pull', () => {
     const names = defaultLanes(26).map((l) => l.name)
-    expect(names).toContain('Easy hire')
-    expect(names).toContain('Operations')
-    expect(names).toContain('Security')
-    expect(names).toContain('Technology')
-    expect(names).toContain('Analysis')
+    for (const n of ['Easy hire', 'Operations', 'Higher ed', 'Mission', 'Outdoors',
+      'Library & museum', 'Marketing', 'Analysis', 'Defense & clearance',
+      'Public safety', 'Veterans', 'Technology', 'Logistics']) {
+      expect(names).toContain(n)
+    }
+  })
+
+  it('Easy hire filters on how gettable a job is, not on its credentials', () => {
+    // The lane filled with six-figure cleared defence roles when it filtered on
+    // degree and years, because those pass a credentials test.
+    const easy = defaultLanes(26).find((l) => l.id === 'easy')!
+    expect(easy.rules.some((r) => r.type === 'ease')).toBe(true)
+    expect(easy.rules.some((r) => r.type === 'degree' || r.type === 'years')).toBe(false)
   })
   it('every lane starts inside the radius and above the floor', () => {
     for (const lane of defaultLanes(26)) {

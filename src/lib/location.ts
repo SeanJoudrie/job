@@ -63,7 +63,11 @@ function resolveOne(raw: string, home: Point): Loc {
   // Strip the working-arrangement words so they can't be read as a place name.
   const cleaned = raw
     .replace(/\b(?:remote|hybrid|onsite|on-site|work from home|wfh)\b/gi, ' ')
-    .replace(/[()]/g, ' ')
+    // Drop the whole parenthesised qualifier, not just the brackets. Keeping
+    // the contents turned "Boston, MA (Main Campus)" into a token reading
+    // "MA Main Campus", which is not a state, so every Boston campus job
+    // resolved to nowhere and fell out of the radius.
+    .replace(/\([^)]*\)/g, ' ')
     .replace(/\s*[-–—]\s*/g, ', ')
     .replace(/\s+/g, ' ')
     .trim()
@@ -86,6 +90,13 @@ function resolveOne(raw: string, home: Point): Loc {
     const named = STATE_NAMES[t.toLowerCase()]
     if (named) {
       state = named
+      stateAt = i
+      break
+    }
+    // A token that opens with a state and carries a qualifier after it.
+    const [head] = t.split(/\s+/)
+    if (head.length === 2 && STATE_CODES.has(head.toUpperCase())) {
+      state = head.toUpperCase()
       stateAt = i
       break
     }

@@ -50,6 +50,15 @@ export const chunkOf = (id: string) => {
 const MAX_MILES = 60
 const TODAY = new Date().toISOString().slice(0, 10)
 
+/** Cheap pre-filter so sources that pay per description do not pay for jobs we drop. */
+const inRange = (locationRaw: string): boolean => {
+  if (!locationRaw) return true
+  const locations = parseLocations(locationRaw, HOME)
+  if (locations.some((l) => l.remote)) return true
+  const miles = nearestMiles(locations)
+  return miles === null || miles <= MAX_MILES
+}
+
 function previous(): Record<string, Seen> {
   if (!existsSync(HISTORY)) return {}
   try {
@@ -73,6 +82,7 @@ function enrich(raw: Raw): Job | null {
     id: raw.id,
     source: raw.source,
     company: raw.company,
+    sector: raw.sector,
     title: raw.title,
     url: raw.url,
     descText: raw.descText,
@@ -123,7 +133,7 @@ async function main() {
 
   for (const board of BOARDS) {
     try {
-      const rows = await fetchBoard(board)
+      const rows = await fetchBoard(board, inRange)
       raws.push(...rows)
       console.log(`  ${board.name.padEnd(20)} ${String(rows.length).padStart(5)} postings`)
     } catch (err) {

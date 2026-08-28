@@ -1,4 +1,4 @@
-export type Source = 'greenhouse' | 'lever' | 'ashby' | 'usajobs' | 'adzuna' | 'paste'
+export type Source = 'greenhouse' | 'lever' | 'ashby' | 'workday' | 'workable' | 'smartrecruiters' | 'usajobs' | 'paste'
 
 export type Period = 'hour' | 'day' | 'week' | 'month' | 'year'
 
@@ -42,6 +42,8 @@ export type Job = {
   id: string
   source: Source
   company: string
+  /** which kind of employer — feeds how gettable the job is judged to be */
+  sector: import('./lib/companies').Sector
   title: string
   url: string
   descText: string

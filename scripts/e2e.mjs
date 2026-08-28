@@ -26,9 +26,12 @@ await page.goto(BASE, { waitUntil: 'networkidle' })
 await page.waitForSelector('nav', { timeout: 20000 })
 
 // --- the pool loads at all -------------------------------------------------
-const rows = () => page.locator('li:has(input[type="checkbox"])')
+// A job row, specifically: an <li> whose own child div holds the checkbox.
+// `li:has(input)` also matches the employer group wrapping them, which made
+// counts double and sent clicks to the group header.
+const rows = () => page.locator('li:has(> div > input[type="checkbox"])')
 const laneChips = page.locator('.chip:has(.tabular)')
-await page.waitForFunction(() => document.querySelectorAll('li input[type=checkbox]').length > 0, null, { timeout: 20000 })
+await page.waitForFunction(() => document.querySelectorAll('li > div > input[type=checkbox]').length > 0, null, { timeout: 20000 })
 check('the pool renders real jobs', (await rows().count()) > 0, `${await rows().count()} rows`)
 
 const header = await page.locator('header').innerText()
@@ -43,6 +46,53 @@ await laneChips.nth(1).click()
 await page.waitForTimeout(400)
 const secondLaneCount = await rows().count()
 check('switching lane changes what is listed', firstLaneCount !== secondLaneCount, `${firstLaneCount} -> ${secondLaneCount}`)
+
+// A phone that opened the app before the lanes changed must still receive the
+// new set — the stale-saved-data trap from the sibling project.
+await page.evaluate(() => localStorage.setItem('job.nets.v1', JSON.stringify([{ id: 'old', name: 'Stale lane', rules: [] }])))
+await page.reload({ waitUntil: 'networkidle' })
+await page.waitForSelector('nav')
+const laneNames = await laneChips.allInnerTexts()
+check('an old saved lane set is replaced by the shipped one', !laneNames.some((t) => /Stale lane/.test(t)) && laneNames.length > 8,
+  `${laneNames.length} lanes after a stale set was planted`)
+
+// --- the two complaints that drove this round ------------------------------
+// 1. "Easy hire" filled with Anduril, which is a six-figure cleared defence
+//    role with several interview rounds. Nothing about that is an easy hire.
+await laneChips.filter({ hasText: 'Easy hire' }).click()
+await page.waitForTimeout(600)
+// Not "no Anduril at all": their warehouse roles at $25-33/hr with one hard
+// requirement genuinely are easy hires and belong here. What must not happen
+// is 178 competitive engineering roles filling the lane.
+const andurilInEasy = await page.evaluate(() => {
+  const header = [...document.querySelectorAll('button[aria-label]')]
+    .find((b) => /Anduril/.test(b.getAttribute('aria-label') ?? ''))
+  const m = header?.getAttribute('aria-label')?.match(/(\d+) jobs/)
+  return m ? Number(m[1]) : 0
+})
+check('Easy hire is not filled by one competitive defence employer', andurilInEasy <= 5,
+  `${andurilInEasy} Anduril roles in Easy hire, of 178 in the pool`)
+
+// 2. One employer could own the whole screen. Grouped, with the big ones shut.
+const groupHeaders = page.locator('button[aria-label*="Expand"], button[aria-label*="Collapse"]')
+check('the list groups by employer', (await groupHeaders.count()) > 0, `${await groupHeaders.count()} groups`)
+
+const firstGroup = groupHeaders.first()
+const groupLabel = await firstGroup.getAttribute('aria-label')
+const rowsBeforeExpand = await rows().count()
+await firstGroup.click()
+await page.waitForTimeout(400)
+const rowsAfterExpand = await rows().count()
+check('an employer folds open and shut', rowsAfterExpand !== rowsBeforeExpand, `${groupLabel}: ${rowsBeforeExpand} -> ${rowsAfterExpand}`)
+await firstGroup.click()
+await page.waitForTimeout(300)
+check('and folds back', (await rows().count()) === rowsBeforeExpand)
+
+await page.getByRole('button', { name: 'flat list' }).click()
+await page.waitForTimeout(500)
+check('and can be turned off entirely', (await page.getByRole('button', { name: 'group by employer' }).count()) === 1)
+await page.getByRole('button', { name: 'group by employer' }).click()
+await page.waitForTimeout(400)
 
 // --- the filter stack, and what a rule costs -------------------------------
 await page.getByRole('button', { name: /show the \d+ rules/ }).click()
@@ -108,7 +158,7 @@ await page.getByLabel('Sort').selectOption('fit')
 await page.waitForTimeout(300)
 
 // --- expanding a job -------------------------------------------------------
-await rows().first().locator('button').first().click()
+await rows().first().locator('button[aria-expanded]').first().click()
 await page.waitForTimeout(600)
 const open = await rows().first().innerText()
 check('expanding shows the scoring axes', /Container/.test(open) && /Reachable/.test(open))

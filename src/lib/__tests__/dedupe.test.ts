@@ -6,6 +6,7 @@ let n = 0
 const job = (company: string, title: string, source: Source = 'greenhouse', over: Partial<Job> = {}): Job => ({
   id: `j${n++}`,
   source,
+  sector: 'tech',
   company,
   title,
   url: `https://example.com/${n}`,
@@ -54,7 +55,7 @@ describe('titles that are the same title', () => {
 describe('merging', () => {
   it('merges the same job seen on three boards into one row', () => {
     const out = dedupe([
-      job('Acme Inc', 'Program Coordinator', 'adzuna'),
+      job('Acme Inc', 'Program Coordinator', 'smartrecruiters'),
       job('Acme', 'Program Coordinator', 'greenhouse'),
       job('Acme LLC', 'Program Coordinator', 'paste'),
     ])
@@ -64,9 +65,9 @@ describe('merging', () => {
 
   it('keeps the company board as the canonical apply link', () => {
     // The direct path. Aggregator redirects are where applications get lost.
-    const out = dedupe([job('Acme', 'Program Coordinator', 'adzuna'), job('Acme', 'Program Coordinator', 'greenhouse')])
+    const out = dedupe([job('Acme', 'Program Coordinator', 'smartrecruiters'), job('Acme', 'Program Coordinator', 'greenhouse')])
     expect(out[0].source).toBe('greenhouse')
-    expect(out[0].alsoOn[0].source).toBe('adzuna')
+    expect(out[0].alsoOn[0].source).toBe('smartrecruiters')
   })
 
   it('merges wording variants of one title', () => {
@@ -92,7 +93,7 @@ describe('merging', () => {
 
   it('keeps the earliest first-seen date, so age is not reset by a new board', () => {
     const out = dedupe([
-      job('Acme', 'Analyst', 'adzuna', { firstSeen: '2026-08-20' }),
+      job('Acme', 'Analyst', 'smartrecruiters', { firstSeen: '2026-08-20' }),
       job('Acme', 'Analyst', 'greenhouse', { firstSeen: '2026-07-01' }),
     ])
     expect(out[0].firstSeen).toBe('2026-07-01')
@@ -102,7 +103,7 @@ describe('merging', () => {
     const long = 'x'.repeat(500)
     const out = dedupe([
       job('Acme', 'Analyst', 'greenhouse', { descText: 'short' }),
-      job('Acme', 'Analyst', 'adzuna', { descText: long }),
+      job('Acme', 'Analyst', 'smartrecruiters', { descText: long }),
     ])
     expect(out[0].descText).toBe(long)
   })

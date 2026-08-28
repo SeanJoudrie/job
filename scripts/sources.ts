@@ -77,7 +77,14 @@ const iso = (v: unknown): string | null => {
   return null
 }
 
-export async function fetchBoard(board: Board): Promise<Raw[]> {
+/** Whether a location string is worth spending a description request on. */
+export type Keep = (locationRaw: string) => boolean
+
+export async function fetchBoard(board: Board, keep: Keep = () => true): Promise<Raw[]> {
+  if (board.ats === 'workday') return fetchWorkday(board, keep)
+  if (board.ats === 'workable') return fetchWorkable(board)
+  if (board.ats === 'smartrecruiters') return fetchSmartRecruiters(board)
+
   if (board.ats === 'greenhouse') {
     const data = (await getJson(`https://boards-api.greenhouse.io/v1/boards/${board.token}/jobs?content=true`)) as {
       jobs?: { id: number; title: string; absolute_url: string; location?: { name?: string }; content?: string; updated_at?: string; first_published?: string }[]
@@ -86,6 +93,7 @@ export async function fetchBoard(board: Board): Promise<Raw[]> {
       id: `greenhouse:${board.token}:${j.id}`,
       source: 'greenhouse' as Source,
       company: board.name,
+      sector: board.sector,
       title: j.title ?? '',
       url: j.absolute_url,
       descText: htmlToText(j.content ?? ''),
@@ -111,6 +119,7 @@ export async function fetchBoard(board: Board): Promise<Raw[]> {
         id: `lever:${board.token}:${j.id}`,
         source: 'lever' as Source,
         company: board.name,
+        sector: board.sector,
         title: j.text ?? '',
         url: j.hostedUrl,
         descText: [j.descriptionPlain ?? '', lists, j.additionalPlain ?? ''].join('\n').trim(),
@@ -130,6 +139,7 @@ export async function fetchBoard(board: Board): Promise<Raw[]> {
     id: `ashby:${board.token}:${j.id}`,
     source: 'ashby' as Source,
     company: board.name,
+    sector: board.sector,
     title: j.title ?? '',
     url: j.jobUrl ?? j.applyUrl ?? '',
     descText: j.descriptionPlain ?? '',
@@ -137,6 +147,140 @@ export async function fetchBoard(board: Board): Promise<Raw[]> {
     payHint: j.compensation?.scrapeableCompensationSalarySummary ?? '',
     postedAt: iso(j.publishedAt),
   }))
+}
+
+/**
+ * Workday. Higher education, hospitals and the defence labs live here and
+ * nowhere else, so without it a whole half of the target market is invisible.
+ * The endpoint is a POST and paginates twenty at a time.
+ */
+async function fetchWorkday(board: Extract<Board, { ats: 'workday' }>, keep: Keep): Promise<Raw[]> {
+  const base = `https://${board.token}.wd${board.wd}.myworkdayjobs.com`
+  const api = `${base}/wday/cxs/${board.token}/${board.site}`
+  const out: Raw[] = []
+  // `total` is reported on the first page only; every later page says 0. An
+  // earlier version compared against it each time and stopped after forty of
+  // four hundred and eighty-eight.
+  let total = Infinity
+
+  for (let offset = 0; offset < 3000; offset += 20) {
+    const res = await fetch(`${api}/jobs`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', accept: 'application/json' },
+      body: JSON.stringify({ appliedFacets: {}, limit: 20, offset, searchText: '' }),
+      signal: AbortSignal.timeout(45000),
+    })
+    if (!res.ok) break
+    const page = (await res.json()) as {
+      total?: number
+      jobPostings?: { title?: string; externalPath?: string; locationsText?: string; postedOn?: string; bulletFields?: string[] }[]
+    }
+    if (offset === 0 && typeof page.total === 'number' && page.total > 0) total = page.total
+    const rows = page.jobPostings ?? []
+    if (rows.length === 0) break
+
+    for (const j of rows) {
+      const path = j.externalPath ?? ''
+      out.push({
+        id: `workday:${board.token}:${path.split('/').pop() ?? Math.random()}`,
+        source: 'workday' as Source,
+        company: board.name,
+        sector: board.sector,
+        title: j.title ?? '',
+        url: `${base}/en-US/${board.site}${path}`,
+        // The list view carries no description; it is fetched per posting below.
+        descText: '',
+        locationRaw: j.locationsText ?? '',
+        payHint: '',
+        postedAt: null,
+      })
+    }
+    if (out.length >= total || rows.length < 20) break
+  }
+
+  // Drop what is out of range BEFORE fetching descriptions. A hospital system
+  // posts hundreds of roles and each description is its own request; filtering
+  // first turns four hundred and eighty-eight calls into a few dozen.
+  const near = out.filter((r) => keep(r.locationRaw))
+
+  // Workday only returns a description one posting at a time, and the parsers
+  // are worth nothing without it. Slow, and that is the accepted trade.
+  let cursor = 0
+  const worker = async () => {
+    while (cursor < near.length) {
+      const row = near[cursor++]
+      const id = row.id.split(':').pop()
+      try {
+        const res = await fetch(`${api}/job/${id}`, { headers: { accept: 'application/json' }, signal: AbortSignal.timeout(20000) })
+        if (!res.ok) continue
+        const d = (await res.json()) as { jobPostingInfo?: { jobDescription?: string; startDate?: string } }
+        row.descText = htmlToText(d.jobPostingInfo?.jobDescription ?? '')
+        row.postedAt = iso(d.jobPostingInfo?.startDate)
+      } catch {
+        /* a posting that will not load is still worth listing */
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: 6 }, worker))
+  return near.filter((r) => r.title)
+}
+
+async function fetchWorkable(board: Extract<Board, { ats: 'workable' }>): Promise<Raw[]> {
+  const data = (await getJson(`https://apply.workable.com/api/v1/widget/accounts/${board.token}?details=true`)) as {
+    jobs?: { id?: string; shortcode?: string; title?: string; url?: string; application_url?: string
+      city?: string; state?: string; telecommuting?: boolean
+      description?: string; requirements?: string; benefits?: string; published_on?: string }[]
+  }
+  return (data.jobs ?? []).map((j) => ({
+    id: `workable:${board.token}:${j.shortcode ?? j.id}`,
+    source: 'workable' as Source,
+    company: board.name,
+    sector: board.sector,
+    title: j.title ?? '',
+    url: j.url ?? j.application_url ?? '',
+    descText: htmlToText([j.description ?? '', j.requirements ?? ''].join('\n')),
+    // city/state sit at the top level here; there is no nested location object.
+    locationRaw: j.telecommuting ? 'Remote' : [j.city, j.state].filter(Boolean).join(', '),
+    payHint: '',
+    postedAt: iso(j.published_on),
+  }))
+}
+
+async function fetchSmartRecruiters(board: Extract<Board, { ats: 'smartrecruiters' }>): Promise<Raw[]> {
+  const list = (await getJson(`https://api.smartrecruiters.com/v1/companies/${board.token}/postings?limit=100`)) as {
+    content?: { id: string; name?: string; releasedDate?: string; location?: { city?: string; region?: string; remote?: boolean } }[]
+  }
+  const rows = list.content ?? []
+  const out: Raw[] = rows.map((j) => ({
+    id: `smartrecruiters:${board.token}:${j.id}`,
+    source: 'smartrecruiters' as Source,
+    company: board.name,
+    sector: board.sector,
+    title: j.name ?? '',
+    url: `https://jobs.smartrecruiters.com/${board.token}/${j.id}`,
+    descText: '',
+    locationRaw: j.location?.remote ? 'Remote' : [j.location?.city, j.location?.region].filter(Boolean).join(', '),
+    payHint: '',
+    postedAt: iso(j.releasedDate),
+  }))
+  let cursor = 0
+  const worker = async () => {
+    while (cursor < out.length) {
+      const row = out[cursor++]
+      const id = row.id.split(':').pop()
+      try {
+        const d = (await getJson(`https://api.smartrecruiters.com/v1/companies/${board.token}/postings/${id}`, 20000)) as {
+          jobAd?: { sections?: Record<string, { text?: string }> }
+        }
+        const sections = d.jobAd?.sections ?? {}
+        row.descText = htmlToText(Object.values(sections).map((x) => x?.text ?? '').join('\n'))
+      } catch {
+        /* keep the listing even when the detail call fails */
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: 6 }, worker))
+  return out
 }
 
 export type { Raw }

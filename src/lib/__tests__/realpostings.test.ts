@@ -3,6 +3,7 @@ import { htmlToText, normaliseTypography } from '../../../scripts/sources'
 import { gapsFor, parseRequirements, type Profile } from '../requirements'
 import { parsePay } from '../pay'
 import { classifyFamilies } from '../roles'
+import { parseLocations } from '../location'
 
 /**
  * Regressions from the first real scan. Every string here is text that came off
@@ -143,5 +144,25 @@ describe('a title with the word sales in it', () => {
   it('joins the sales family however it is dressed up', () => {
     expect(classifyFamilies('Retail Sales Enablement Manager', '')).toContain('sales')
     expect(classifyFamilies('Sales Operations Analyst', '')).toContain('sales')
+  })
+})
+
+describe('a campus qualifier in the location field', () => {
+  // Real Northeastern posting. Stripping only the brackets left a token reading
+  // "MA Main Campus", which matched no state, so 285 postings resolved to
+  // nowhere and dropped out of the radius entirely.
+  it('reads "Boston, MA (Main Campus)" as Boston', () => {
+    const [loc] = parseLocations('Boston, MA (Main Campus)')
+    expect(loc.city).toBe('Boston')
+    expect(loc.state).toBe('MA')
+    expect(loc.miles).toBeLessThan(15)
+  })
+
+  it('and an HQ suffix the same way', () => {
+    expect(parseLocations('New York, NY (HQ)')[0].state).toBe('NY')
+  })
+
+  it('still resolves a state that carries a trailing qualifier', () => {
+    expect(parseLocations('Nahant, MA Campus')[0].state).toBe('MA')
   })
 })

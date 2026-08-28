@@ -17,6 +17,7 @@ beforeEach(() => {
 const job = (company: string, title: string, over: Partial<Job> = {}): Job => ({
   id: `greenhouse:x:${Math.random()}`,
   source: 'greenhouse',
+  sector: 'tech',
   company,
   title,
   url: 'https://example.com/j',

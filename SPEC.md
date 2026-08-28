@@ -68,9 +68,16 @@ whichever lane is active, or across all of them.
 
 | Lane | What's in it |
 |---|---|
-| **Easy hire** | Fast to get, low friction, people-facing, minimal gatekeeping. Pays now. |
+| **Easy hire** | Judged on how gettable a job actually is — employer type, pay band, and how the posting reads — not on how few credentials it lists. |
 | **Operations** | Program coordination, ops management, logistics, facilities, events, scheduling — the five-year track. |
-| **Higher ed** | Every college inside the radius. Student affairs, program coordination, campus operations. Already done and enjoyed. |
+| **Higher ed** | Every college inside the radius. Student affairs, admissions, program coordination, campus operations. Already done and enjoyed. |
+| **Mission** | Nonprofit, faith-based, youth and community work. Development, case work, volunteer coordination. |
+| **Outdoors** | Conservation, land stewardship, parks, trails, naturalist and environmental work. |
+| **Library & museum** | Libraries, archives, museums, collections, visitor services. |
+| **Marketing** | Marketing, communications, content, brand, outreach and engagement. |
+| **Public safety** | Emergency management, EOC coordination, dispatch, preparedness. |
+| **Veterans** | VSO work, veteran services, transition assistance. |
+| **Logistics** | Warehouse, fulfilment, inventory, supply chain. A realistic bridging tier. |
 | **Security** | Clearable roles, defense contractors, primes, GovCon. Service is an asset here, not a scheduling problem. |
 | **Technology** | Support and solutions engineering, technical operations, data analysis, QA — where a self-taught portfolio counts without a CS degree gate. |
 | **Analysis** | Analyst, research, investigative, geopolitics-adjacent. The direction, worth applying to at bad odds because the payoff isn't this quarter. |
@@ -79,6 +86,18 @@ whichever lane is active, or across all of them.
 Lanes are editable and addable — they are named nets, not a fixed taxonomy. Each
 shows its own count, so the top of the app answers "how much is actually out
 there for me right now" per lane instead of as one meaningless total.
+
+### Gettability is its own measurement
+
+"Easy hire" first filtered on degree and years, and filled with defence-technology
+postings: they ask for a bachelor's and three years, so they passed a
+credentials test. They also pay six figures, run several interview rounds and
+often want a clearance already held. Nothing about that is an easy hire.
+
+What predicts a winnable process is the kind of employer, the pay band, and how
+the posting is written — "hiring immediately, will train" against "take-home
+exercise and a panel loop". That is scored separately, shown on every job, and
+sortable, so the claim can always be checked rather than taken on trust.
 
 **Why lanes and not one blended score:** a bridge job and a career job are
 optimised against different things. Blend them into a single ranking and the
@@ -96,7 +115,10 @@ rows scroll smoothly on a phone.
 - **Expanded:** full description, extracted requirements, apply link, and
   one-tap "turn this phrase into a rule"
 - **Sort, always visible:** commute · pay · newest · title (reversible)
-- **Search:** free text, narrows live
+- **Search:** free text, narrows live; where the match is in the description
+  rather than the heading, the row shows the matching words
+- **Grouped by employer**, folded shut past a handful, because one company
+  posting a hundred roles inside the radius would otherwise own the screen
 
 ### The filter stack
 

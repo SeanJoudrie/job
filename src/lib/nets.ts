@@ -1,4 +1,5 @@
 import type { Job } from '../types'
+import { easeScore } from './ease'
 import { meetsFloor } from './pay'
 import { DEGREE_RANK } from './requirements'
 
@@ -23,6 +24,8 @@ export type Rule =
   | { id: string; enabled: boolean; type: 'remote'; mode: 'exclude' | 'only' }
   | { id: string; enabled: boolean; type: 'company'; mode: 'has' | 'lacks'; value: string }
   | { id: string; enabled: boolean; type: 'applied'; hide: boolean }
+  | { id: string; enabled: boolean; type: 'ease'; min: number }
+  | { id: string; enabled: boolean; type: 'sector'; mode: 'has' | 'lacks'; value: string }
 
 export type Net = { id: string; name: string; rules: Rule[] }
 
@@ -68,14 +71,18 @@ export function passes(job: Job, rule: Rule, appliedKeys: Set<string>, keyOf: (j
     }
     case 'applied':
       return rule.hide ? !appliedKeys.has(keyOf(job)) : true
+    case 'ease':
+      return easeScore(job) >= rule.min
+    case 'sector':
+      return rule.mode === 'has' ? job.sector === rule.value : job.sector !== rule.value
   }
 }
 
 export type Step = { rule: Rule; before: number; after: number }
-export type Applied = { jobs: Job[]; steps: Step[] }
+export type NetResult = { jobs: Job[]; steps: Step[] }
 
 /** Runs the stack in order and keeps the count after each rule. */
-export function runNet(jobs: Job[], net: Net, appliedKeys: Set<string>, keyOf: (j: Job) => string): Applied {
+export function runNet(jobs: Job[], net: Net, appliedKeys: Set<string>, keyOf: (j: Job) => string): NetResult {
   const steps: Step[] = []
   let current = jobs
   for (const rule of net.rules) {
@@ -111,6 +118,10 @@ export function describeRule(rule: Rule): string {
       return `${rule.mode === 'has' ? '+' : '−'} company contains "${rule.value}"`
     case 'applied':
       return rule.hide ? '− already applied' : '+ including applied'
+    case 'ease':
+      return `+ realistically gettable (${rule.min}+/10)`
+    case 'sector':
+      return `${rule.mode === 'has' ? '+' : '−'} ${rule.value} employers`
   }
 }
 
@@ -125,6 +136,7 @@ const base = (floor: number, miles = 25): Rule[] => [
   mkRule({ type: 'distance', miles, includeRemote: false }),
   mkRule({ type: 'pay', floorHourly: floor, includeUnlisted: true }),
   mkRule({ type: 'family', mode: 'lacks', value: 'sales' }),
+  mkRule({ type: 'family', mode: 'lacks', value: 'unpaid' }),
   mkRule({ type: 'remote', mode: 'exclude' }),
   mkRule({ type: 'applied', hide: true }),
 ]
@@ -134,14 +146,37 @@ const base = (floor: number, miles = 25): Rule[] => [
  * a single ranked column the bridge job and the career job compete for the same
  * row and both lose.
  */
+/**
+ * Bumped whenever the shipped lane set changes meaningfully.
+ *
+ * Saved lanes live on the device, so without this a phone that opened the app
+ * once keeps its old set forever and never sees a new one — the same trap that
+ * left the sibling project showing placeholder data for days. On a bump the
+ * shipped lanes replace the stored ones. Custom rules are lost, which is a real
+ * cost, and still far better than silently never receiving the new lanes.
+ */
+export const LANES_VERSION = 2
+
 export function defaultLanes(floor: number): Net[] {
+  const fam = (value: string) => mkRule({ type: 'family', mode: 'has', value })
   return [
-    { id: 'easy', name: 'Easy hire', rules: [...base(floor), mkRule({ type: 'degree', max: 'bachelor' }), mkRule({ type: 'years', max: 3 })] },
-    { id: 'operations', name: 'Operations', rules: [...base(floor), mkRule({ type: 'family', mode: 'has', value: 'operations' })] },
-    { id: 'coordination', name: 'Coordination', rules: [...base(floor), mkRule({ type: 'family', mode: 'has', value: 'coordinator' })] },
-    { id: 'security', name: 'Security', rules: [...base(floor), mkRule({ type: 'clearance', allowActiveRequired: false })] },
-    { id: 'technology', name: 'Technology', rules: [...base(floor + 2), mkRule({ type: 'family', mode: 'has', value: 'technical' })] },
-    { id: 'analysis', name: 'Analysis', rules: [...base(floor), mkRule({ type: 'family', mode: 'has', value: 'analyst' })] },
+    // Gettability, not credentials. An earlier version filtered on degree and
+    // years and filled with six-figure cleared defence roles, which pass a
+    // credentials test and are nothing like an easy hire.
+    { id: 'easy', name: 'Easy hire', rules: [...base(floor), mkRule({ type: 'ease', min: 6 })] },
+    { id: 'operations', name: 'Operations', rules: [...base(floor), fam('operations')] },
+    { id: 'coordination', name: 'Coordination', rules: [...base(floor), fam('coordinator')] },
+    { id: 'education', name: 'Higher ed', rules: [...base(floor), fam('education')] },
+    { id: 'mission', name: 'Mission', rules: [...base(floor), fam('mission')] },
+    { id: 'outdoors', name: 'Outdoors', rules: [...base(floor), fam('outdoors')] },
+    { id: 'culture', name: 'Library & museum', rules: [...base(floor), fam('culture')] },
+    { id: 'marketing', name: 'Marketing', rules: [...base(floor), fam('marketing')] },
+    { id: 'analysis', name: 'Analysis', rules: [...base(floor), fam('analyst')] },
+    { id: 'security', name: 'Defense & clearance', rules: [...base(floor), mkRule({ type: 'clearance', allowActiveRequired: false })] },
+    { id: 'publicsafety', name: 'Public safety', rules: [...base(floor), fam('publicsafety')] },
+    { id: 'veterans', name: 'Veterans', rules: [...base(floor), fam('veterans')] },
+    { id: 'technology', name: 'Technology', rules: [...base(floor + 2), fam('technical')] },
+    { id: 'logistics', name: 'Logistics', rules: [...base(floor), fam('logistics')] },
     { id: 'everything', name: 'Everything', rules: [mkRule({ type: 'distance', miles: 25, includeRemote: true }), mkRule({ type: 'applied', hide: true })] },
   ]
 }

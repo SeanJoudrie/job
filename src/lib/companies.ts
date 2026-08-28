@@ -1,39 +1,64 @@
 /**
- * The scan list. Seeded toward what the profile and the postcode actually point
- * at rather than a generic top-200, and meant to be edited.
+ * The scan list. Seeded toward what the profile and the postcode point at
+ * rather than a generic top-200, and meant to be edited.
  *
- * Coverage here is deliberate rather than broad: these boards are the direct
- * apply path and they carry a job days before an aggregator does.
+ * `sector` is not decoration: it feeds how gettable a job is judged to be. A
+ * defence-tech company and a university administration office can post the same
+ * title and run completely different hiring processes.
  */
-export type Board = { ats: 'greenhouse' | 'lever' | 'ashby'; token: string; name: string; tag: string }
+export type Sector = 'defense' | 'tech' | 'university' | 'health' | 'nonprofit' | 'gov'
+
+/** Split per ATS rather than lumped, so `Extract<Board, { ats: 'workable' }>` resolves. */
+type Common = { token: string; name: string; sector: Sector }
+export type Board =
+  | ({ ats: 'greenhouse' } & Common)
+  | ({ ats: 'lever' } & Common)
+  | ({ ats: 'ashby' } & Common)
+  | ({ ats: 'workable' } & Common)
+  | ({ ats: 'smartrecruiters' } & Common)
+  | ({ ats: 'workday'; wd: number; site: string } & Common)
 
 export const BOARDS: Board[] = [
-  // Defence tech — service is an asset here, and most sponsor clearances
-  // rather than demanding one up front.
-  { ats: 'greenhouse', token: 'andurilindustries', name: 'Anduril', tag: 'defense' },
-  { ats: 'lever', token: 'shieldai', name: 'Shield AI', tag: 'defense' },
-  { ats: 'lever', token: 'palantir', name: 'Palantir', tag: 'defense' },
-  { ats: 'greenhouse', token: 'vannevarlabs', name: 'Vannevar Labs', tag: 'defense' },
-  { ats: 'greenhouse', token: 'scaleai', name: 'Scale AI', tag: 'defense' },
-  { ats: 'ashby', token: 'primer', name: 'Primer', tag: 'defense' },
+  // Defence tech — service is an asset, and most sponsor a clearance rather
+  // than demanding one up front. Competitive to get into.
+  { ats: 'greenhouse', token: 'andurilindustries', name: 'Anduril', sector: 'defense' },
+  { ats: 'lever', token: 'shieldai', name: 'Shield AI', sector: 'defense' },
+  { ats: 'lever', token: 'palantir', name: 'Palantir', sector: 'defense' },
+  { ats: 'greenhouse', token: 'vannevarlabs', name: 'Vannevar Labs', sector: 'defense' },
+  { ats: 'greenhouse', token: 'scaleai', name: 'Scale AI', sector: 'defense' },
+  { ats: 'ashby', token: 'primer', name: 'Primer', sector: 'defense' },
+  { ats: 'workday', token: 'draper', wd: 5, site: 'Draper_Careers', name: 'Draper', sector: 'defense' },
 
-  // Boston area — operations and coordination roles, not only engineering.
-  { ats: 'greenhouse', token: 'klaviyo', name: 'Klaviyo', tag: 'boston' },
-  { ats: 'greenhouse', token: 'datadog', name: 'Datadog', tag: 'boston' },
-  { ats: 'greenhouse', token: 'toast', name: 'Toast', tag: 'boston' },
-  { ats: 'greenhouse', token: 'cargurus', name: 'CarGurus', tag: 'boston' },
-  { ats: 'greenhouse', token: 'formlabs', name: 'Formlabs', tag: 'boston' },
-  { ats: 'greenhouse', token: 'markforged', name: 'Markforged', tag: 'boston' },
-  { ats: 'greenhouse', token: 'veracode', name: 'Veracode', tag: 'boston' },
-  { ats: 'greenhouse', token: 'ginkgobioworks', name: 'Ginkgo Bioworks', tag: 'boston' },
-  { ats: 'greenhouse', token: 'amwell', name: 'Amwell', tag: 'boston' },
-  { ats: 'greenhouse', token: 'butterflynetwork', name: 'Butterfly Network', tag: 'boston' },
-  { ats: 'ashby', token: 'whoop', name: 'WHOOP', tag: 'boston' },
-  { ats: 'ashby', token: 'circle', name: 'Circle', tag: 'boston' },
+  // Higher education — student affairs, admissions, campus operations. Done
+  // before and enjoyed, and the closest structural fit on the whole list.
+  { ats: 'workday', token: 'northeastern', wd: 1, site: 'Careers', name: 'Northeastern', sector: 'university' },
+  { ats: 'workday', token: 'brandeis', wd: 5, site: 'jobs', name: 'Brandeis', sector: 'university' },
+  { ats: 'workday', token: 'babson', wd: 1, site: 'Staff', name: 'Babson', sector: 'university' },
+  { ats: 'workday', token: 'suffolk', wd: 1, site: 'External', name: 'Suffolk University', sector: 'university' },
 
-  // National employers that post Boston roles.
-  { ats: 'greenhouse', token: 'mongodb', name: 'MongoDB', tag: 'national' },
-  { ats: 'greenhouse', token: 'cloudflare', name: 'Cloudflare', tag: 'national' },
-  { ats: 'greenhouse', token: 'okta', name: 'Okta', tag: 'national' },
-  { ats: 'greenhouse', token: 'asana', name: 'Asana', tag: 'national' },
+  // Health systems — large, steady, and full of coordination and operations work.
+  { ats: 'workday', token: 'tuftsmedicine', wd: 1, site: 'jobs', name: 'Tufts Medicine', sector: 'health' },
+  { ats: 'smartrecruiters', token: 'bostonmedicalcenter', name: 'Boston Medical Center', sector: 'health' },
+
+  // Conservation and mission work.
+  { ats: 'workable', token: 'thetrustees', name: 'The Trustees of Reservations', sector: 'nonprofit' },
+  { ats: 'lever', token: 'sierraclub', name: 'Sierra Club', sector: 'nonprofit' },
+
+  // Boston-area employers — operations and coordination roles, not only engineering.
+  { ats: 'greenhouse', token: 'klaviyo', name: 'Klaviyo', sector: 'tech' },
+  { ats: 'greenhouse', token: 'datadog', name: 'Datadog', sector: 'tech' },
+  { ats: 'greenhouse', token: 'toast', name: 'Toast', sector: 'tech' },
+  { ats: 'greenhouse', token: 'cargurus', name: 'CarGurus', sector: 'tech' },
+  { ats: 'greenhouse', token: 'formlabs', name: 'Formlabs', sector: 'tech' },
+  { ats: 'greenhouse', token: 'markforged', name: 'Markforged', sector: 'tech' },
+  { ats: 'greenhouse', token: 'veracode', name: 'Veracode', sector: 'tech' },
+  { ats: 'greenhouse', token: 'ginkgobioworks', name: 'Ginkgo Bioworks', sector: 'health' },
+  { ats: 'greenhouse', token: 'amwell', name: 'Amwell', sector: 'health' },
+  { ats: 'greenhouse', token: 'butterflynetwork', name: 'Butterfly Network', sector: 'health' },
+  { ats: 'ashby', token: 'whoop', name: 'WHOOP', sector: 'tech' },
+  { ats: 'ashby', token: 'circle', name: 'Circle', sector: 'tech' },
+  { ats: 'greenhouse', token: 'mongodb', name: 'MongoDB', sector: 'tech' },
+  { ats: 'greenhouse', token: 'cloudflare', name: 'Cloudflare', sector: 'tech' },
+  { ats: 'greenhouse', token: 'okta', name: 'Okta', sector: 'tech' },
+  { ats: 'greenhouse', token: 'asana', name: 'Asana', sector: 'tech' },
 ]

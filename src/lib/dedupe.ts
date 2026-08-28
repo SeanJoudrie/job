@@ -87,7 +87,9 @@ const place = (job: Job) => {
 export const dedupeKey = (job: Job) => `${normaliseCompany(job.company)}::${normaliseTitle(job.title)}::${place(job)}`
 
 /** Which board's link to keep. The company's own board is the direct apply path. */
-const SOURCE_RANK: Record<string, number> = { greenhouse: 0, lever: 0, ashby: 0, usajobs: 1, adzuna: 3, paste: 2 }
+const SOURCE_RANK: Record<string, number> = {
+  greenhouse: 0, lever: 0, ashby: 0, workday: 0, workable: 0, smartrecruiters: 1, usajobs: 1, paste: 2,
+}
 
 export const SIMILARITY_THRESHOLD = 0.82
 

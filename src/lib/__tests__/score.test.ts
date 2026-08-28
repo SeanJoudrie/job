@@ -6,7 +6,7 @@ import { axesFor, DEFAULT_WEIGHTS, scoreOf, variantFor } from '../score'
 const SEAN: Profile = { years: 5, degree: 'bachelor', clearance: 'none' }
 let n = 0
 const job = (over: Partial<Job> = {}): Job => ({
-  id: `j${n++}`, source: 'greenhouse', company: 'Acme', title: 'Program Coordinator',
+  id: `j${n++}`, source: 'greenhouse', sector: 'tech', company: 'Acme', title: 'Program Coordinator',
   url: 'https://x/1', descText: '', locations: [], miles: 10, remote: false, pay: null,
   requirements: [], families: [], postedAt: new Date().toISOString().slice(0, 10),
   firstSeen: '2026-08-20', lastSeen: '2026-08-28', scans: 1, reposts: 0, alsoOn: [], linkOk: true, ...over,

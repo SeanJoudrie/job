@@ -4,22 +4,23 @@ import { Chip, Field, input } from './components/ui'
 import { isDeadReq, keyOf, loadApplied, markApplied, setStatus, unmarkApplied, withGhosting, exportApplied, type AppliedLog } from './lib/applied'
 import { loadDescriptions, loadIndex, type Index } from './lib/data'
 import { boardCount } from './lib/dedupe'
-import { defaultLanes, describeRule, mkRule, runNet, type Net, type Rule } from './lib/nets'
+import { defaultLanes, describeRule, LANES_VERSION, mkRule, runNet, type Net, type Rule } from './lib/nets'
 import { axesFor, AXIS_LABELS, scoreOf, variantFor, type AxisId } from './lib/score'
+import { easeScore } from './lib/ease'
 import { loadSettings, saveSettings, type Settings } from './lib/settings'
 import { read, write } from './lib/storage'
 import type { Job } from './types'
 import { coverLetter, scoreJob, type Verdict } from './lib/claude'
 
 type View = 'pool' | 'applied' | 'dupes' | 'settings'
-type Sort = 'fit' | 'commute' | 'pay' | 'newest' | 'title'
+type Sort = 'fit' | 'commute' | 'pay' | 'newest' | 'title' | 'gettable'
 const PAGE = 60
 
 export default function App() {
   const [index, setIndex] = useState<Index | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [settings, setSettings] = useState<Settings>(loadSettings)
-  const [nets, setNets] = useState<Net[]>(() => read<Net[]>('job.nets.v1', defaultLanes(loadSettings().floorHourly)))
+  const [nets, setNets] = useState<Net[]>(() => loadNets(loadSettings().floorHourly))
   const [laneId, setLaneId] = useState<string>(() => read<string>('job.lane.v1', 'easy'))
   const [applied, setApplied] = useState<AppliedLog>(() => withGhosting(loadApplied()))
   const [view, setView] = useState<View>('pool')
@@ -30,6 +31,10 @@ export default function App() {
   const [descs, setDescs] = useState<Record<string, string>>({})
   const [limit, setLimit] = useState(PAGE)
   const [showStack, setShowStack] = useState(false)
+  const [grouped, setGrouped] = useState(() => read('job.grouped.v1', true))
+  // Explicit per-employer overrides. A set with a "!name" sentinel for the
+  // closed case was too easy to misread.
+  const [groupOverrides, setGroupOverrides] = useState<Record<string, boolean>>({})
   const [verdicts, setVerdicts] = useState<Record<string, Verdict>>(() => read('job.verdicts.v1', {}))
   const [letters, setLetters] = useState<Record<string, string>>(() => read('job.letters.v1', {}))
   const [busy, setBusy] = useState<string | null>(null)
@@ -37,8 +42,9 @@ export default function App() {
   useEffect(() => {
     loadIndex().then(setIndex).catch((e: Error) => setError(e.message))
   }, [])
-  useEffect(() => void write('job.nets.v1', nets), [nets])
+  useEffect(() => void write('job.nets.v1', { version: LANES_VERSION, nets }), [nets])
   useEffect(() => void write('job.lane.v1', laneId), [laneId])
+  useEffect(() => void write('job.grouped.v1', grouped), [grouped])
   useEffect(() => void write('job.verdicts.v1', verdicts), [verdicts])
   useEffect(() => void write('job.letters.v1', letters), [letters])
 
@@ -72,11 +78,40 @@ export default function App() {
       pay: (a, b) => payOf(b.j) - payOf(a.j),
       newest: (a, b) => (b.j.postedAt ?? '').localeCompare(a.j.postedAt ?? ''),
       title: (a, b) => a.j.title.localeCompare(b.j.title),
+      gettable: (a, b) => easeScore(b.j) - easeScore(a.j),
     }
     return [...withScore].sort(cmp[sort]).map((x) => x.j)
   }, [searched, sort, settings])
 
   useEffect(() => setLimit(PAGE), [laneId, query, sort])
+  useEffect(() => setGroupOverrides({}), [laneId, query, sort])
+
+  /**
+   * One employer can otherwise own the whole screen — Anduril alone posts 167
+   * roles inside the radius. Grouped by company, biggest groups folded shut,
+   * so the list shows the range of what is out there rather than one company's
+   * hiring plan.
+   */
+  const groups = useMemo(() => {
+    if (!grouped) return null
+    const byCompany = new Map<string, Job[]>()
+    for (const j of sorted) {
+      const bucket = byCompany.get(j.company)
+      if (bucket) bucket.push(j)
+      else byCompany.set(j.company, [j])
+    }
+    return [...byCompany.entries()].map(([company, jobs]) => ({
+      company,
+      jobs,
+      best: Math.max(...jobs.map((j) => scoreOf(axesFor(j, settings.profile), settings.weights))),
+    }))
+  }, [sorted, grouped, settings])
+
+  /** Small groups sit open; a big one folds shut so it cannot own the screen. */
+  const FOLD_AT = 4
+  const isOpen = (company: string, size: number) => groupOverrides[company] ?? size <= FOLD_AT
+  const toggleGroup = (company: string, size: number) =>
+    setGroupOverrides({ ...groupOverrides, [company]: !isOpen(company, size) })
 
   // Descriptions load only for what is actually open or chosen.
   const needed = useMemo(() => [...new Set([...expanded, ...selected])], [expanded, selected])
@@ -129,6 +164,27 @@ export default function App() {
     setBusy(null)
   }
 
+  const renderRow = (job: Job) => (
+    <div key={job.id}>
+      <JobRow
+        job={hydrate(job)}
+        profile={settings.profile}
+        weights={settings.weights}
+        applied={appliedKeys.has(keyOf(job))}
+        selected={selected.has(job.id)}
+        expanded={expanded.has(job.id)}
+        deadReq={isDeadReq(job, applied)}
+        description={descs[job.id]}
+        query={query}
+        showCompany={!grouped}
+        onToggleExpand={() => setExpanded(toggle(expanded, job.id))}
+        onToggleSelect={() => setSelected(toggle(selected, job.id))}
+        onApply={(next) => apply(job, next)}
+      />
+      {(verdicts[job.id] || letters[job.id]) && <VerdictBlock verdict={verdicts[job.id]} letter={letters[job.id]} />}
+    </div>
+  )
+
   if (error) return <Shell><p className="p-4 text-sm" style={{ color: 'var(--bad)' }}>{error}</p></Shell>
   if (!index) return <Shell><p className="p-4 text-sm muted">Loading the pool…</p></Shell>
 
@@ -179,6 +235,7 @@ export default function App() {
                 <option value="pay">pay</option>
                 <option value="newest">newest</option>
                 <option value="title">title</option>
+                <option value="gettable">gettable</option>
               </select>
             </div>
             <div className="flex items-center gap-3 px-3 pb-2 text-[11px]">
@@ -186,6 +243,12 @@ export default function App() {
                 {showStack ? 'hide' : 'show'} the {lane.rules.length} rules
               </button>
               <span className="muted tabular">{sorted.length} showing</span>
+              <button onClick={() => setGrouped(!grouped)} style={{ color: 'var(--accent)' }}>
+                {grouped ? 'flat list' : 'group by employer'}
+              </button>
+              {grouped && Object.keys(groupOverrides).length > 0 && (
+                <button onClick={() => setGroupOverrides({})} className="faint">reset groups</button>
+              )}
               {selected.size > 0 && (
                 <>
                   <span className="muted tabular">{selected.size} selected</span>
@@ -203,34 +266,49 @@ export default function App() {
 
       {view === 'pool' && (
         <>
-          <ul>
-            {sorted.slice(0, limit).map((job) => (
-              <div key={job.id}>
-                <JobRow
-                  job={hydrate(job)}
-                  profile={settings.profile}
-                  weights={settings.weights}
-                  applied={appliedKeys.has(keyOf(job))}
-                  selected={selected.has(job.id)}
-                  expanded={expanded.has(job.id)}
-                  deadReq={isDeadReq(job, applied)}
-                  description={descs[job.id]}
-                  query={query}
-                  onToggleExpand={() => setExpanded(toggle(expanded, job.id))}
-                  onToggleSelect={() => setSelected(toggle(selected, job.id))}
-                  onApply={(next) => apply(job, next)}
-                />
-                {(verdicts[job.id] || letters[job.id]) && (
-                  <VerdictBlock verdict={verdicts[job.id]} letter={letters[job.id]} />
-                )}
-              </div>
-            ))}
-          </ul>
+          {groups ? (
+            <ul>
+              {groups.slice(0, limit).map(({ company, jobs: rows, best }) => {
+                const open = isOpen(company, rows.length)
+                return (
+                  <li key={company}>
+                    <button
+                      type="button"
+                      onClick={() => toggleGroup(company, rows.length)}
+                      aria-expanded={open}
+                      aria-label={`${open ? 'Collapse' : 'Expand'} ${company}, ${rows.length} jobs`}
+                      className="panel flex w-full items-center gap-2 border-b line px-3 py-2 text-left"
+                    >
+                      <span aria-hidden className="w-3 faint">{open ? '▾' : '▸'}</span>
+                      <span className="flex-1 truncate text-xs font-semibold">{company}</span>
+                      <span className="tabular text-[11px] faint">best {best.toFixed(1)}</span>
+                      <span className="tabular text-[11px] muted">{rows.length}</span>
+                    </button>
+                    {open && (
+                      <ul>
+                        {rows.map((job) => renderRow(job))}
+                      </ul>
+                    )}
+                  </li>
+                )
+              })}
+            </ul>
+          ) : (
+            <ul>{sorted.slice(0, limit).map((job) => renderRow(job))}</ul>
+          )}
           {sorted.length === 0 && <Empty lane={lane} steps={steps} />}
-          {limit < sorted.length && (
-            <button onClick={() => setLimit(limit + PAGE)} className="w-full py-4 text-center text-xs" style={{ color: 'var(--accent)' }}>
-              show more ({sorted.length - limit} below)
-            </button>
+          {groups ? (
+            limit < groups.length && (
+              <button onClick={() => setLimit(limit + PAGE)} className="w-full py-4 text-center text-xs" style={{ color: 'var(--accent)' }}>
+                show more employers ({groups.length - limit} below)
+              </button>
+            )
+          ) : (
+            limit < sorted.length && (
+              <button onClick={() => setLimit(limit + PAGE)} className="w-full py-4 text-center text-xs" style={{ color: 'var(--accent)' }}>
+                show more ({sorted.length - limit} below)
+              </button>
+            )
           )}
         </>
       )}
@@ -249,6 +327,13 @@ export default function App() {
       )}
     </Shell>
   )
+}
+
+/** Stored lanes are replaced when the shipped set changes; see LANES_VERSION. */
+function loadNets(floor: number): Net[] {
+  const stored = read<{ version?: number; nets?: Net[] } | Net[]>('job.nets.v1', [])
+  const isCurrent = !Array.isArray(stored) && stored.version === LANES_VERSION && Array.isArray(stored.nets)
+  return isCurrent ? (stored as { nets: Net[] }).nets : defaultLanes(floor)
 }
 
 const payOf = (j: Job) => {
@@ -270,7 +355,7 @@ function FilterStack({ lane, steps, total, onChange }: { lane: Net; steps: { rul
         <span>everything in the pool</span>
         <span className="tabular">{total}</span>
       </div>
-      {lane.rules.map((rule, i) => {
+      {lane.rules.map((rule) => {
         const s = stepOf(rule.id)
         const cost = s ? s.before - s.after : 0
         return (
@@ -292,7 +377,6 @@ function FilterStack({ lane, steps, total, onChange }: { lane: Net; steps: { rul
             >
               ×
             </button>
-            <span className="sr-only">{i}</span>
           </div>
         )
       })}

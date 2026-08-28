@@ -52,6 +52,22 @@ export const FAMILIES: Family[] = [
   { id: 'analyst', label: 'analysis', kind: 'boost', titles: /\b(?:analyst|analysis|intelligence|research(?:er)?|investigat(?:or|ions)|data (?:analyst|specialist))\b/i },
   { id: 'student', label: 'student services', kind: 'boost', titles: /\b(?:student (?:affairs|services|success|life)|academic (?:advisor|coordinator)|registrar|admissions|residence life|dean of students)\b/i },
   { id: 'technical', label: 'technical', kind: 'boost', titles: /\b(?:support engineer|solutions? (?:engineer|architect|consultant)|technical (?:support|account|program)|implementation|\bqa\b|quality assurance|software|developer|engineer)\b/i },
+
+  // The areas named as genuine pulls rather than inferred from the resume.
+  { id: 'marketing', label: 'marketing & communications', kind: 'boost', titles: /\b(?:marketing|communications?|social media|content (?:manager|specialist|coordinator|strategist)|brand|public relations|\bpr\b|digital (?:marketing|media)|copywriter|outreach|engagement)\b/i },
+  { id: 'education', label: 'higher education', kind: 'boost', titles: /\b(?:student (?:affairs|services|success|life|activities|involvement)|academic (?:advisor|affairs|coordinator|services)|registrar|admissions|financial aid|residence (?:life|hall)|dean|campus|enrollment|orientation|alumni|faculty (?:support|affairs)|bursar|provost)\b/i },
+  { id: 'mission', label: 'mission & nonprofit', kind: 'boost', titles: /\b(?:nonprofit|non-profit|development (?:officer|associate|coordinator|manager)|fundrais|donor|grants?|volunteer|community (?:outreach|engagement|organiz)|advocacy|case (?:manager|worker)|social services|youth (?:program|development|worker)|mentor|ministry|parish|diocese|chaplain|mission)\b/i },
+  { id: 'outdoors', label: 'conservation & outdoors', kind: 'boost', titles: /\b(?:conservation|environmental|park (?:ranger|manager|coordinator)|ranger|land (?:steward|manager|protection)|trail|naturalist|steward(?:ship)?|sustainab|wildlife|ecolog|forestry|watershed|farm|garden|horticultur|outdoor)\b/i },
+  { id: 'culture', label: 'libraries, museums & archives', kind: 'boost', titles: /\b(?:librar(?:y|ian)|archiv(?:e|ist|al)|museum|gallery|curator|collections|exhibit|visitor (?:services|experience)|docent|cultural|records manage|special collections|interpretation)\b/i },
+  { id: 'publicsafety', label: 'public safety & emergency', kind: 'boost', titles: /\b(?:emergency (?:management|preparedness|services|operations)|\beoc\b|dispatch|911|public safety|disaster|continuity of operations|incident (?:command|management)|response coordinator)\b/i },
+  { id: 'logistics', label: 'logistics & warehouse', kind: 'boost', titles: /\b(?:warehouse|fulfillment|inventory|supply chain|shipping|receiving|distribution|forklift|picker|packer|materials handler|stockroom|courier|dispatcher|fleet)\b/i },
+  // Not jobs. A volunteer listing has no pay to fail a floor and no
+  // requirements to fail a gap check, so it sails through every other rule.
+  // Apprenticeships are deliberately absent — a paid trade apprenticeship is a
+  // real route, not noise.
+  { id: 'unpaid', label: 'volunteer & unpaid', kind: 'exclude', titles: /\b(?:volunteer|unpaid|intern(?:ship)?|co-?op student|work[- ]study|shadow(?:ing)?)\b/i },
+
+  { id: 'veterans', label: 'veterans services', kind: 'boost', titles: /\b(?:veteran|\bvso\b|military (?:family|liaison|outreach)|transition assistance|\bva\b medical|servicemember)\b/i },
 ]
 
 /**
