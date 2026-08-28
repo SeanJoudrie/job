@@ -43,9 +43,52 @@ theirs, it's invisible, and it optimises for their engagement. A single click
 should not be able to define a career category for years, and there should never
 be a job reachable through a friend's link but not through your own search.
 
+### Accuracy over speed
+
+An explicit trade, made on purpose: **it is fine for this to be slow.** A search
+that takes thirty seconds and is right beats an instant one that is wrong.
+
+That permission is load-bearing further down. It is why the scanner fetches full
+job descriptions rather than list-view summaries, why scoring reads the whole
+posting instead of a snippet, and why the scan can afford to walk a few hundred
+company boards a night. None of that would survive a requirement to feel fast.
+
+Progress is shown. Nothing is silently truncated to hit a time budget.
+
 ---
 
-## 2. Screen 1 — the pool
+## 2. Lanes
+
+**Not one giant list.** A wide net is the right strategy when employment is the
+goal, but a wide net rendered as a single ranked column is unusable — the bridge
+job and the career job compete for the same row and both lose.
+
+So the pool is divided into **lanes**. Each lane is a saved filter stack with its
+own defaults, and each shrinks independently. Free-text search runs inside
+whichever lane is active, or across all of them.
+
+| Lane | What's in it |
+|---|---|
+| **Easy hire** | Fast to get, low friction, people-facing, minimal gatekeeping. Pays now. |
+| **Operations** | Program coordination, ops management, logistics, facilities, events, scheduling — the five-year track. |
+| **Higher ed** | Every college inside the radius. Student affairs, program coordination, campus operations. Already done and enjoyed. |
+| **Security** | Clearable roles, defense contractors, primes, GovCon. Service is an asset here, not a scheduling problem. |
+| **Technology** | Support and solutions engineering, technical operations, data analysis, QA — where a self-taught portfolio counts without a CS degree gate. |
+| **Analysis** | Analyst, research, investigative, geopolitics-adjacent. The direction, worth applying to at bad odds because the payoff isn't this quarter. |
+| **Federal** | USAJOBS inside the radius, veteran-preference paths surfaced rather than buried. |
+
+Lanes are editable and addable — they are named nets, not a fixed taxonomy. Each
+shows its own count, so the top of the app answers "how much is actually out
+there for me right now" per lane instead of as one meaningless total.
+
+**Why lanes and not one blended score:** a bridge job and a career job are
+optimised against different things. Blend them into a single ranking and the
+result is wrong for both. Kept apart, each list is internally coherent and can
+be worked on its own terms.
+
+---
+
+## 3. Screen 1 — the pool
 
 One list. Expandable rows. **No pagination.** Virtualised so several thousand
 rows scroll smoothly on a phone.
@@ -59,8 +102,8 @@ rows scroll smoothly on a phone.
 ### The filter stack
 
 ```
-  Everything scanned                          4,312
-+ within 25 miles of home                     1,204
+  Everything in this lane                     4,312
++ within 25 miles of home        (default)    1,204
 − role family: commission sales                 890
 − requires an active clearance                  812
 − fully remote                                  770
@@ -105,7 +148,7 @@ Three states, because "holds" and "can obtain" are different markets:
 
 ---
 
-## 3. Screen 2 — the score
+## 4. Screen 2 — the score
 
 Select any number, hit **Next**. Each job comes back with a **1–10** that is
 never a single opaque number: it decomposes into axes you can see and reweight.
@@ -147,7 +190,7 @@ A hard gap is worth knowing. A soft gap is worth applying anyway.
 Rejection happens at both ends — too credentialed for hourly work, not
 credentialed enough for the roles above it. So the app classifies posting tier
 (hourly · entry ops · professional · senior) and, where the tier is below the
-resume, flags it and **switches to the stripped resume variant** (§4).
+resume, flags it and **switches to the stripped resume variant** (§5).
 
 ### A low score never blocks anything
 
@@ -157,7 +200,7 @@ block, not a hidden prompt.
 
 ---
 
-## 4. Screen 3 — the application pack
+## 5. Screen 3 — the application pack
 
 Select from the scored set → **Next** → per job, a **resume variant** and a
 **cover letter**, both editable in place.
@@ -194,7 +237,7 @@ Both variants:
 
 ---
 
-## 5. Wildcard
+## 6. Wildcard
 
 A section that **ignores the filter stack on purpose** — jobs that wouldn't
 survive the funnel, tagged so they never look like a bug:
@@ -208,7 +251,7 @@ with people. Low-demand, not low-contact.
 
 ---
 
-## 6. Liveness — not chasing ghosts
+## 7. Liveness — not chasing ghosts
 
 - Posting age is shown on every row
 - **Reposts are detected and flagged.** A req that reappears every 30 days is
@@ -221,7 +264,7 @@ count come free.
 
 ---
 
-## 7. Sources
+## 8. Sources
 
 | Source | How | Coverage |
 |---|---|---|
@@ -236,13 +279,16 @@ Direct scraping of the big three is deliberately absent. Their bot defence is
 good and the penalty for losing lands on the account, which is not a thing worth
 risking. The alert-email path gets their listings in without that bet.
 
+**25 miles from home is the default radius on every lane**, applied before
+anything else. It can be widened per lane, but nothing starts wide.
+
 Distance uses an offline ZIP-centroid table — free, no key, no rate limit,
 accurate to a couple of miles, which is all a radius filter needs. The home ZIP
 is a setting that never leaves the device, so a move is one field, not a rebuild.
 
 ---
 
-## 8. The starter scan list
+## 9. The starter scan list
 
 Seeded, then owned and edited. Weighted toward commutable, service-compatible,
 and coordination-shaped rather than a generic top-200.
@@ -266,18 +312,34 @@ badly served by searching only one half of it.
 
 ---
 
-## 9. Pay is a floor, not a target
+## 10. Pay
 
-The pay rule is a **hard floor with unlisted-pay included by default.** This is a
-bridging role, so the floor sits low, and at a low floor an "exclude unlisted"
-default would throw away half the board to filter almost nothing.
+The floor is a **setting on the device, never a number in this repo.** A public
+repo stating a walk-away figure hands it to the other side of every negotiation
+that follows.
 
-Money is not a scoring axis. A job clearing the floor is not made better by
-clearing it twice over — the axes in §3 decide, not the number.
+The mechanics, which are not secret:
 
----
+- **Compare against the top of a posted range, not the bottom.** A range whose
+  top clears the floor stays in, flagged, because a band starting low is a
+  negotiation rather than a rejection. Filtering on the bottom throws away
+  jobs that would have paid.
+- **Normalise everything to one unit** before comparing — hourly, annual,
+  monthly, and weekly all appear, and a floor that only understands one of them
+  silently drops the rest.
+- **Unlisted pay is included by default**, tagged `no pay listed` so it is
+  visibly an unknown rather than a silent pass. Roughly half of postings carry
+  no number, and excluding them to enforce a floor removes more good jobs than
+  bad ones. A separate toggle hides them for anyone who wants that.
+- **A high-fit override relaxes the floor.** One configurable step down, applied
+  only to jobs scoring at the top of the axes in §4. A genuinely good job that
+  is slightly under is worth seeing; an ordinary one is not.
 
-## 10. How it runs
+Pay is a **gate, not an axis.** Clearing the floor twice over does not make a
+job better — the axes in §4 decide the ranking. What money buys here is the
+right to be on the list at all.
+
+## 11. How it runs
 
 - Static site on GitHub Pages, phone-first
 - A scheduled GitHub Action scans overnight and commits results, so the page is
@@ -289,7 +351,7 @@ clearing it twice over — the axes in §3 decide, not the number.
 
 ---
 
-## 11. Not yet decided
+## 12. Not yet decided
 
 - Whether the paste box parses alert emails on-device or needs a small parser
   service (on-device preferred; some HTML is hostile)
