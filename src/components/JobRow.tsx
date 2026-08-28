@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import type { Job } from '../types'
+import { commuteOf } from '../lib/commute'
 import { boardCount } from '../lib/dedupe'
 import { formatPay } from '../lib/pay'
 import { gapsFor, type Profile } from '../lib/requirements'
-import { rank, variantFor, type Weights } from '../lib/score'
+import { defaultCtx, LOGISTICS, rank, variantFor, type Ctx, type Weights } from '../lib/score'
 import { Bar, Chip } from './ui'
 
 const VERDICT_TONE = { matched: 'good', 'soft-gap': 'warn', 'hard-gap': 'bad', unstated: 'plain' } as const
@@ -26,11 +27,12 @@ function snippet(job: Job, query: string): string | null {
 }
 
 export function JobRow({
-  job, profile, weights, applied, selected, expanded, deadReq, onToggleExpand, onToggleSelect, onApply, description, query = '', showCompany = true,
+  job, profile, weights, ctx = defaultCtx(), applied, selected, expanded, deadReq, onToggleExpand, onToggleSelect, onApply, description, query = '', showCompany = true,
 }: {
   job: Job
   profile: Profile
   weights: Weights
+  ctx?: Ctx
   applied: boolean
   selected: boolean
   expanded: boolean
@@ -44,7 +46,8 @@ export function JobRow({
   showCompany?: boolean
 }) {
   const [showAll, setShowAll] = useState(false)
-  const { axes, gettable: ease, fit, score } = rank(job, profile, weights)
+  const { axes, gettable: ease, industry, logistics, fit, score } = rank(job, profile, weights, ctx)
+  const commute = commuteOf(job)
   const gaps = gapsFor(job.requirements, profile)
   const shown = showAll ? gaps : gaps.filter((g) => g.verdict !== 'unstated').slice(0, 8)
   const boards = boardCount(job)
@@ -74,7 +77,15 @@ export function JobRow({
                 <span aria-hidden>·</span>
               </>
             )}
-            <span>{job.remote ? 'remote' : job.miles !== null ? `${Math.round(job.miles)} mi` : 'location unclear'}</span>
+            <span>
+              {job.remote
+                ? 'remote'
+                : commute.minutes !== null
+                  ? `${commute.minutes} min${commute.rail ? ' · rail' : ''}`
+                  : commute.rail
+                    ? 'rail'
+                    : 'location unclear'}
+            </span>
             <span aria-hidden>·</span>
             <span style={{ color: job.pay ? undefined : 'var(--faint)' }}>{formatPay(job.pay)}</span>
             {applied && <Chip tone="accent">applied</Chip>}
@@ -82,6 +93,9 @@ export function JobRow({
             {job.reposts > 0 && !deadReq && <Chip tone="warn">reposted {job.reposts}×</Chip>}
             {job.linkOk === false && <Chip tone="bad">dead link</Chip>}
             {boards > 1 && <Chip>on {boards} boards</Chip>}
+            {industry.id !== 'unclassified' && (
+              <Chip tone={industry.excluded ? 'bad' : industry.weight >= 8 ? 'good' : 'plain'}>{industry.label}</Chip>
+            )}
           </div>
           {match && <p className="mt-1 text-[11px] faint italic">{match}</p>}
         </button>
@@ -96,13 +110,16 @@ export function JobRow({
               <span className="tabular w-5">{ease.score}</span>
               <span className="faint">{ease.why.join(', ') || 'nothing either way'}</span>
             </span>
-            {score < fit && (
-              <span className="w-full text-[11px] faint">
-                fit reads {fit.toFixed(1)}; scaled to {score.toFixed(1)} by how winnable it is
-              </span>
-            )}
+            <span className="w-full text-[11px] faint">
+              logistics {logistics.toFixed(1)} · overall fit {fit.toFixed(1)}
+              {score < fit && ` · scaled to ${score.toFixed(1)} by how winnable it is`}
+            </span>
             {axes.map((a) => (
-              <span key={a.id} className="flex items-center gap-1.5 text-[11px] muted">
+              <span
+                key={a.id}
+                className="flex items-center gap-1.5 text-[11px] muted"
+                title={LOGISTICS.includes(a.id) ? 'logistics — 60% of the fit' : 'the job itself — 40%'}
+              >
                 <span className="w-24 shrink-0">{a.label}</span>
                 <Bar value={a.score} />
                 <span className="tabular w-5">{a.score}</span>
@@ -150,7 +167,7 @@ export function JobRow({
               <input type="checkbox" checked={applied} onChange={(e) => onApply(e.target.checked)} className="h-4 w-4" />
               I applied
             </label>
-            <span className="text-[11px] faint">resume: {variantFor(job)}</span>
+            <span className="text-[11px] faint">resume: {variantFor(job, ctx.now)}</span>
             {job.alsoOn.length > 0 && (
               <details className="text-[11px] faint">
                 <summary className="cursor-pointer">also on {job.alsoOn.length} other board{job.alsoOn.length > 1 ? 's' : ''}</summary>

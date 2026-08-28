@@ -1,6 +1,8 @@
 import type { Job } from '../types'
+import { withinCommute } from './commute'
 import { easeScore } from './ease'
-import { meetsFloor } from './pay'
+import { industryFor, isCreativeFunction, isFrontline } from './industry'
+import { meetsFloor, topHourly } from './pay'
 import { DEGREE_RANK } from './requirements'
 
 /**
@@ -15,7 +17,7 @@ import { DEGREE_RANK } from './requirements'
 export type Rule =
   | { id: string; enabled: boolean; type: 'text'; mode: 'has' | 'lacks'; field: 'title' | 'body' | 'both'; value: string }
   | { id: string; enabled: boolean; type: 'family'; mode: 'has' | 'lacks'; value: string }
-  | { id: string; enabled: boolean; type: 'distance'; miles: number; includeRemote: boolean }
+  | { id: string; enabled: boolean; type: 'commute'; maxMinutes: number; includeRemote: boolean }
   | { id: string; enabled: boolean; type: 'pay'; floorHourly: number; includeUnlisted: boolean }
   | { id: string; enabled: boolean; type: 'posted'; days: number }
   | { id: string; enabled: boolean; type: 'degree'; max: 'highschool' | 'associate' | 'bachelor' | 'master' | 'doctorate' }
@@ -26,6 +28,12 @@ export type Rule =
   | { id: string; enabled: boolean; type: 'applied'; hide: boolean }
   | { id: string; enabled: boolean; type: 'ease'; min: number }
   | { id: string; enabled: boolean; type: 'sector'; mode: 'has' | 'lacks'; value: string }
+  /** The case-file industry table. `ids` narrows to named industries; `min` sets a tier floor. */
+  | { id: string; enabled: boolean; type: 'industry'; min: number; ids?: string[] }
+  /** Retail and front-line customer service, allowed only above this rate. */
+  | { id: string; enabled: boolean; type: 'frontline'; minHourly: number }
+  /** Communications, media, editorial, design — the crossover search. */
+  | { id: string; enabled: boolean; type: 'creative' }
 
 export type Net = { id: string; name: string; rules: Rule[] }
 
@@ -44,9 +52,9 @@ export function passes(job: Job, rule: Rule, appliedKeys: Set<string>, keyOf: (j
       const has = job.families.includes(rule.value)
       return rule.mode === 'has' ? has : !has
     }
-    case 'distance':
+    case 'commute':
       if (job.remote) return rule.includeRemote
-      return job.miles !== null && job.miles <= rule.miles
+      return withinCommute(job, rule.maxMinutes)
     case 'pay': {
       const verdict = meetsFloor(job.pay, rule.floorHourly)
       // Unlisted pay is an unknown, not a failure. Excluding it to enforce a
@@ -75,6 +83,22 @@ export function passes(job: Job, rule: Rule, appliedKeys: Set<string>, keyOf: (j
       return easeScore(job) >= rule.min
     case 'sector':
       return rule.mode === 'has' ? job.sector === rule.value : job.sector !== rule.value
+    case 'industry': {
+      const ind = industryFor(job)
+      if (rule.ids) return rule.ids.includes(ind.id)
+      return ind.weight >= rule.min
+    }
+    case 'frontline': {
+      // Unknown pay cannot clear a floor it never stated. Everywhere else an
+      // unstated salary is treated as an unknown rather than a failure, and
+      // that is right — but retail is the one category the case file names as
+      // a problem, and the whole point of the rule is the confirmed number.
+      if (!isFrontline(job)) return true
+      const top = topHourly(job.pay)
+      return top !== null && top >= rule.minHourly
+    }
+    case 'creative':
+      return isCreativeFunction(job)
   }
 }
 
@@ -100,8 +124,8 @@ export function describeRule(rule: Rule): string {
       return `${rule.mode === 'has' ? '+' : '−'} ${rule.field} contains "${rule.value}"`
     case 'family':
       return `${rule.mode === 'has' ? '+' : '−'} role family: ${rule.value}`
-    case 'distance':
-      return `+ within ${rule.miles} miles${rule.includeRemote ? ' (or remote)' : ''}`
+    case 'commute':
+      return `+ within ${rule.maxMinutes} min of home${rule.includeRemote ? ' (or remote)' : ''}`
     case 'pay':
       return `+ pay ≥ $${rule.floorHourly}/hr${rule.includeUnlisted ? ' (incl. unlisted)' : ''}`
     case 'posted':
@@ -122,8 +146,18 @@ export function describeRule(rule: Rule): string {
       return `+ realistically gettable (${rule.min}+/10)`
     case 'sector':
       return `${rule.mode === 'has' ? '+' : '−'} ${rule.value} employers`
+    case 'industry':
+      if (rule.ids) return `+ ${rule.ids.map(labelOf).join(', ')}`
+      return rule.min <= 1 ? '− excluded industries (Tier E)' : `+ Tier A industries only (${rule.min}+)`
+    case 'frontline':
+      return `− retail & front-line service under $${rule.minHourly}/hr`
+    case 'creative':
+      return '+ communications, media, editorial or design'
   }
 }
+
+/** Industry ids read badly in a rule list. "archives_records_management" is not English. */
+const labelOf = (id: string) => id.replace(/_/g, ' ')
 
 let seq = 0
 const rid = () => `r${Date.now().toString(36)}${seq++}`
@@ -131,11 +165,20 @@ const rid = () => `r${Date.now().toString(36)}${seq++}`
 export type RuleSpec = { [K in Rule['type']]: Omit<Extract<Rule, { type: K }>, 'id' | 'enabled'> }[Rule['type']]
 export const mkRule = (spec: RuleSpec): Rule => ({ id: rid(), enabled: true, ...spec }) as Rule
 
-/** The defaults every lane starts from: home radius, the floor, no sales, nothing already applied to. */
-const base = (floor: number, miles = 25): Rule[] => [
-  mkRule({ type: 'distance', miles, includeRemote: false }),
+/**
+ * The defaults every lane starts from.
+ *
+ * The order is the order the case file puts them in: logistics first, because
+ * they outrank everything, then the exclusions that hold regardless of pay.
+ */
+const base = (floor: number, maxMinutes = 30): Rule[] => [
+  mkRule({ type: 'commute', maxMinutes, includeRemote: false }),
   mkRule({ type: 'pay', floorHourly: floor, includeUnlisted: true }),
-  mkRule({ type: 'family', mode: 'lacks', value: 'sales' }),
+  // Tier E: insurance, gambling, telemarketing, collections, police and fire,
+  // corrections, dispatch, transit, utilities, the trades, kitchens, food
+  // production and assembly lines. Every one of them is in the table at zero.
+  mkRule({ type: 'industry', min: 0.5 }),
+  mkRule({ type: 'frontline', minHourly: 30 }),
   mkRule({ type: 'family', mode: 'lacks', value: 'unpaid' }),
   mkRule({ type: 'family', mode: 'lacks', value: 'placeholder' }),
   mkRule({ type: 'remote', mode: 'exclude' }),
@@ -155,8 +198,11 @@ const base = (floor: number, miles = 25): Rule[] => [
  * left the sibling project showing placeholder data for days. On a bump the
  * shipped lanes replace the stored ones. Custom rules are lost, which is a real
  * cost, and still far better than silently never receiving the new lanes.
+ *
+ * 3: rebuilt on the case file — commute in minutes, the industry table, the
+ * front-line pay rule, and the crossover search that had never been run.
  */
-export const LANES_VERSION = 2
+export const LANES_VERSION = 3
 
 /**
  * The rules the Top list ranks within.
@@ -166,28 +212,47 @@ export const LANES_VERSION = 2
  * ranking jobs paying below the floor. Top is a recommendation, so it obeys
  * the same baseline every lane does.
  */
-export const topBaseline = (floor: number): Net => ({ id: 'top', name: 'Top', rules: base(floor) })
+export const topBaseline = (floor: number, maxMinutes = 30): Net => ({ id: 'top', name: 'Top', rules: base(floor, maxMinutes) })
 
-export function defaultLanes(floor: number): Net[] {
+export function defaultLanes(floor: number, maxMinutes = 30): Net[] {
+  const b = () => base(floor, maxMinutes)
   const fam = (value: string) => mkRule({ type: 'family', mode: 'has', value })
+  const ind = (...ids: string[]) => mkRule({ type: 'industry', min: 0.5, ids })
   return [
     // Gettability, not credentials. An earlier version filtered on degree and
     // years and filled with six-figure cleared defence roles, which pass a
     // credentials test and are nothing like an easy hire.
-    { id: 'easy', name: 'Easy hire', rules: [...base(floor), mkRule({ type: 'ease', min: 6 })] },
-    { id: 'operations', name: 'Operations', rules: [...base(floor), fam('operations')] },
-    { id: 'coordination', name: 'Coordination', rules: [...base(floor), fam('coordinator')] },
-    { id: 'education', name: 'Higher ed', rules: [...base(floor), fam('education')] },
-    { id: 'mission', name: 'Mission', rules: [...base(floor), fam('mission')] },
-    { id: 'outdoors', name: 'Outdoors', rules: [...base(floor), fam('outdoors')] },
-    { id: 'culture', name: 'Library & museum', rules: [...base(floor), fam('culture')] },
-    { id: 'marketing', name: 'Marketing', rules: [...base(floor), fam('marketing')] },
-    { id: 'analysis', name: 'Analysis', rules: [...base(floor), fam('analyst')] },
-    { id: 'security', name: 'Defense & clearance', rules: [...base(floor), mkRule({ type: 'clearance', allowActiveRequired: false })] },
-    { id: 'publicsafety', name: 'Public safety', rules: [...base(floor), fam('publicsafety')] },
-    { id: 'veterans', name: 'Veterans', rules: [...base(floor), fam('veterans')] },
-    { id: 'technology', name: 'Technology', rules: [...base(floor + 2), fam('technical')] },
-    { id: 'logistics', name: 'Logistics', rules: [...base(floor), fam('logistics')] },
-    { id: 'everything', name: 'Everything', rules: [mkRule({ type: 'distance', miles: 25, includeRemote: true }), mkRule({ type: 'applied', hide: true })] },
+    { id: 'easy', name: 'Easy hire', rules: [...b(), mkRule({ type: 'ease', min: 6 })] },
+    // The one the case file singles out as never having been tried: a Tier A
+    // institution and a job that involves writing or making something.
+    { id: 'crossover', name: 'Crossover', rules: [...b(), mkRule({ type: 'industry', min: 8 }), mkRule({ type: 'creative' })] },
+    { id: 'coordination', name: 'Coordination', rules: [...b(), fam('coordinator')] },
+    { id: 'operations', name: 'Operations', rules: [...b(), fam('operations')] },
+    { id: 'education', name: 'Higher ed & schools', rules: [...b(), ind('higher_education_admin', 'k12_school_district_nonteaching')] },
+    {
+      id: 'creative',
+      name: 'Creative & media',
+      rules: [
+        ...b(),
+        ind('media_creative_production', 'publishing_editorial', 'graphic_design', 'video_content_production', 'event_production_av', 'marketing_operations_nonsales'),
+      ],
+    },
+    { id: 'culture', name: 'Library & museum', rules: [...b(), ind('museums_cultural_institutions', 'public_library')] },
+    { id: 'records', name: 'Records & archives', rules: [...b(), ind('archives_records_management')] },
+    { id: 'government', name: 'Government', rules: [...b(), ind('municipal_town_government', 'state_agency', 'federal_agency', 'courts_judicial_admin')] },
+    { id: 'legalhr', name: 'Legal & HR', rules: [...b(), ind('legal_assistant_paralegal', 'hr_recruiting_coordination')] },
+    { id: 'health', name: 'Health admin', rules: [...b(), ind('hospitals_health_admin')] },
+    // Section 7: "apply anyway, entry-level and support-tier only."
+    { id: 'technical', name: 'IT & data', rules: [...b(), ind('it_helpdesk_support', 'qa_testing', 'data_analysis', 'software_development')] },
+    { id: 'logistics', name: 'Warehouse & logistics', rules: [...b(), ind('warehouse_distribution', 'postal_service', 'moving_delivery')] },
+    { id: 'facilities', name: 'Facilities & custodial', rules: [...b(), ind('facilities_maintenance', 'custodial')] },
+    { id: 'mission', name: 'Mission', rules: [...b(), ind('faith_based_nonprofits', 'social_services_case_mgmt', 'conservation_land_trusts', 'veterans_services')] },
+    // Empty from November to March, on purpose. The Empty panel names the rule
+    // that emptied it, so it reads as a season rather than a bug.
+    { id: 'outdoors', name: 'Outdoors', rules: [...b(), ind('state_parks_dcr', 'environmental_field_work', 'groundskeeping_landscaping')] },
+    // Not a clearance he holds — one an employer will sponsor. That is already
+    // met, and it is the single largest advantage on the resume.
+    { id: 'security', name: 'Sponsors a clearance', rules: [...b(), mkRule({ type: 'clearance', allowActiveRequired: false })] },
+    { id: 'everything', name: 'Everything', rules: [mkRule({ type: 'commute', maxMinutes: maxMinutes * 2, includeRemote: true }), mkRule({ type: 'applied', hide: true })] },
   ]
 }

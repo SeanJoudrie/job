@@ -66,22 +66,46 @@ So the pool is divided into **lanes**. Each lane is a saved filter stack with it
 own defaults, and each shrinks independently. Free-text search runs inside
 whichever lane is active, or across all of them.
 
+The lanes are built from the industry table in [PROFILE.md](PROFILE.md) §5
+rather than from ad-hoc keyword lists, so a lane and a score cannot disagree
+about what a job is.
+
 | Lane | What's in it |
 |---|---|
 | **Easy hire** | Judged on how gettable a job actually is — employer type, pay band, and how the posting reads — not on how few credentials it lists. |
-| **Operations** | Program coordination, ops management, logistics, facilities, events, scheduling — the five-year track. |
-| **Higher ed** | Every college inside the radius. Student affairs, admissions, program coordination, campus operations. Already done and enjoyed. |
-| **Mission** | Nonprofit, faith-based, youth and community work. Development, case work, volunteer coordination. |
-| **Outdoors** | Conservation, land stewardship, parks, trails, naturalist and environmental work. |
-| **Library & museum** | Libraries, archives, museums, collections, visitor services. |
-| **Marketing** | Marketing, communications, content, brand, outreach and engagement. |
-| **Public safety** | Emergency management, EOC coordination, dispatch, preparedness. |
-| **Veterans** | VSO work, veteran services, transition assistance. |
-| **Logistics** | Warehouse, fulfilment, inventory, supply chain. A realistic bridging tier. |
-| **Security** | Clearable roles, defense contractors, primes, GovCon. Service is an asset here, not a scheduling problem. |
-| **Technology** | Support and solutions engineering, technical operations, data analysis, QA — where a self-taught portfolio counts without a CS degree gate. |
-| **Analysis** | Analyst, research, investigative, geopolitics-adjacent. The direction, worth applying to at bad odds because the payoff isn't this quarter. |
-| **Federal** | USAJOBS inside the radius, veteran-preference paths surfaced rather than buried. |
+| **Crossover** | A Tier A employer and a job that involves writing or making something. The search that had never been run. |
+| **Coordination** | Coordinators, schedulers, liaisons, administrators. |
+| **Operations** | Program coordination, ops management, facilities, events, scheduling. |
+| **Higher ed & schools** | Higher-education administration and K-12 non-teaching. Tier A, and already done and enjoyed. |
+| **Creative & media** | Media production, publishing, editorial, graphic design, video, events and AV, marketing operations. |
+| **Library & museum** | Museums, cultural institutions, libraries. |
+| **Records & archives** | Archives, records management, document control, public records. |
+| **Government** | Municipal, state, federal, courts. |
+| **Legal & HR** | Paralegal and legal support; HR, recruiting coordination, payroll, benefits. |
+| **Health admin** | Hospital administration — patient access, medical records, scheduling. Not clinical. |
+| **IT & data** | Helpdesk, technical support, QA, junior analysis. Apply-anyway, entry and support tier. |
+| **Warehouse & logistics** | Warehouse, distribution, inventory, postal, delivery. A realistic bridging tier. |
+| **Facilities & custodial** | Facilities, maintenance, custodial. Tier C at proper pay. |
+| **Mission** | Faith-based nonprofits, social services, conservation, veterans services. |
+| **Outdoors** | Parks, environmental field work, groundskeeping. **Empty from November to March, on purpose.** |
+| **Sponsors a clearance** | Roles where a clearance is obtainable rather than already held. Service is an asset here. |
+| **Everything** | The commute, and nothing else. Nothing is hidden from a manual search. |
+
+Two lanes were removed rather than added. **Public safety** pointed at
+emergency management and dispatch, which the table scores at zero; and trade
+apprenticeships, which an earlier version of this spec defended as "a real
+route, not noise", are now a hard exclusion. Both were my calls and both were
+wrong.
+
+### The hard exclusions are rules, not filters
+
+Insurance, gambling, telemarketing, collections, police and fire, corrections,
+transit, utilities, the trades, kitchens, food production, assembly lines,
+licensed clinical work, and retail or front-line service under $30/hr are all
+out. They are out as **two visible rules in every lane's stack** — one for the
+Tier E table, one for the front-line pay floor — each showing what it removed
+and each switchable. Switching one off shows the jobs; it does not recommend
+them, because a Tier E job is capped at 3 in the ranking regardless.
 
 Lanes are editable and addable — they are named nets, not a fixed taxonomy. Each
 shows its own count, so the top of the app answers "how much is actually out
@@ -176,19 +200,34 @@ never a single opaque number: it decomposes into axes you can see and reweight.
 
 ### The axes
 
-| Axis | What it measures | Default weight |
+The axes come in two groups, and the split is the point: **logistics carry 60%
+of the fit and the job itself carries 40%.** A Tier C role at $28/hr twenty
+minutes away beats a Tier A role at $21/hr in Boston, and a score that cannot
+express that is not describing this search.
+
+**Logistics — 60%**
+
+| Axis | What it measures | Weight |
 |---|---|---|
-| **Gettable** | Whether this can realistically be won — employer type, pay band, seniority, held-clearance demands, and how the posting reads | **Highest, and it caps the total** |
-| **Container** | Recurring in-person contact with the same people, on a schedule, with a defined task | **Highest** |
-| **With-people** | Social contact embedded in shared work — not quota-carrying, not policing people | High |
-| **Reachable** | How much of the requirement gap is soft rather than hard | High |
-| **Overqualification risk** | Whether this posting is likely to auto-reject as "flight risk" | Medium |
-| **Service-compatible** | Veteran-friendly, USERRA-routine, defense-adjacent, federal | **Heavy** |
-| **Domain pull** | Analysis · higher-ed admin · student affairs · operations · program coordination · events & facilities · investigative / research | Medium |
-| **Liveness** | Is this a real open req or a ghost? | Gate, not a score |
+| **Pay** | How far above the floor the top of the band sits. Curved: the first five dollars over matter more than the fifth five | 3 |
+| **Commute** | Drive minutes from home, or the train. Not miles | 3 |
+| **Posture** | Seated all day or moving all day, both good. Standing still in one place, worst | 2.5 |
+| **Hours** | Weekday daytime ideal; regular late nights and overnights close to disqualifying | 1.5 |
+
+**The job itself — 40%**
+
+| Axis | What it measures | Weight |
+|---|---|---|
+| **Industry** | The tier table. Replaces the hand-waved "domain pull" it used to be | 3 |
+| **Container** | Recurring in-person contact with the same people, on a schedule, with a defined task | 2 |
+| **Service-compatible** | Veteran-friendly, USERRA-routine, defense-adjacent, federal | 1.5 |
+| **With-people** | Social contact embedded in shared work — not quota-carrying, not policing people | 1.5 |
+| **Reachable** | How much of the requirement gap is soft rather than hard | 1.5 |
+| **Overqualification risk** | Whether this posting is likely to auto-reject as "flight risk" | 1 |
+| **Liveness** | Is this a real open req or a ghost? | 0.5 |
 
 Every weight is a slider the owner controls. The default weighting is an
-argument, not a fact, and it should be overridable in one tap.
+argument, not a fact, and it is overridable in one tap.
 
 ### Reachable — soft vs hard requirements
 
@@ -237,21 +276,43 @@ so seven of the eight axes were decoration. Worse, clearance-sponsoring jobs —
 the most valuable kind here — averaged **3.50** against 5.35 for everything
 else. The feature was being punished.
 
-Now gettability is counted once, blended at a **25% share**, and the axes carry
-fit. That number is not taste: fit is an average of seven weakly-related axes so
-it clusters (sd 0.92) while gettability spreads (sd 3.37), which means a
-coefficient does not mean what it looks like. Sweeping it against the pool:
+Now gettability is counted once, as a blend, and the axes carry fit. The share
+has been re-measured since pay became an axis, and the re-measurement found the
+third mistake.
 
-| share | r(fit) | r(gettability) |
-|---|---|---|
-| 0.10 | 0.93 | 0.47 |
-| 0.20 | 0.78 | 0.72 |
-| **0.25** | **0.69** | **0.81** |
-| 0.45 | 0.42 | 0.95 |
+**Pay and gettability correlate at r = −0.84 in this pool.** They are very
+nearly the same number with the sign flipped: the jobs that pay well here are
+defence and software engineering, which are hard to win, and the jobs that are
+easy to win are university and hospital administration, which pay less. So
+every point of gettability blended in is a point taken off pay — and pay is the
+first constraint there is. At the old 25% share, with pay newly an axis, the pay
+axis correlated with the final score at **−0.47**. Paying better made a job
+score worse, and nothing in the code said so.
 
-Gettability stays primary; fit still moves the ranking. A separate floor holds
-the genuinely unwinnable (gettability ≤ 1) below 4 whatever their fit, and the
-raw fit is shown alongside so the number can be explained rather than trusted.
+Sweeping the coefficient again, with the impossible-floor in place. Two columns,
+because a whole-pool correlation mixes two populations — the ~270 capped
+unwinnable postings sitting at the bottom, and the list that actually gets read.
+The first measures the cap; only the second measures the ranking.
+
+| share | whole pool: r(pay) | top 200: r(fit) | r(pay) | r(gettability) |
+|---|---|---|---|---|
+| 0.10 | −0.22 | 0.55 | −0.09 | 0.38 |
+| 0.15 | −0.30 | 0.42 | 0.06 | 0.40 |
+| **0.20** | **−0.39** | **0.48** | **0.20** | **0.33** |
+| 0.25 | −0.48 | 0.43 | 0.18 | 0.40 |
+
+**20%** is where every group moves the top of the list in the direction it
+should and none of them owns it. A separate floor holds the genuinely unwinnable
+(gettability ≤ 1) below 4 whatever their fit, a Tier E industry is held below 3,
+and the raw fit is shown alongside so the number can be explained rather than
+trusted. `npm run audit` reruns all of this against the current pool.
+
+The ease model's own pay rule had to change too. It stepped: +2 below $70k a
+year, 0 above it, which put a two-point cliff at $33.65 an hour — the middle of
+the band actually being searched. Two nearly identical warehouse jobs came out a
+point and a half apart on nothing but which side of the step they fell. It is a
+smooth curve now, and it still penalises six figures, which is a real signal
+about how many people are competing.
 
 Gettability itself was also clamped to 0..10, which piled **a quarter of the
 pool onto exactly 0** — a senior cleared defence role and an ordinary
@@ -457,13 +518,17 @@ The mechanics, which are not secret:
   to solve. Roughly half of postings carry
   no number, and excluding them to enforce a floor removes more good jobs than
   bad ones. A separate toggle hides them for anyone who wants that.
-- **A high-fit override relaxes the floor.** One configurable step down, applied
-  only to jobs scoring at the top of the axes in §4. A genuinely good job that
-  is slightly under is worth seeing; an ordinary one is not.
+- **No stretch below the floor.** There used to be a configurable step down for
+  a job scoring at the very top. There isn't now: the floor is stated as an
+  absolute minimum rather than a preference, and a "high-fit override" is
+  exactly the mechanism by which an absolute minimum stops being one.
 
-Pay is a **gate, not an axis.** Clearing the floor twice over does not make a
-job better — the axes in §4 decide the ranking. What money buys here is the
-right to be on the list at all.
+Pay is **both a gate and an axis**, and that is a reversal. It used to be a gate
+only, on the reasoning that clearing the floor twice over does not make a job
+better. That reasoning was wrong for this search: pay is the first of the
+logistics and the logistics outrank everything, so the money has to move the
+ranking and not merely open the door. What it must not do is move it
+*backwards*, which is what §4 is about.
 
 ## 13. How it runs
 

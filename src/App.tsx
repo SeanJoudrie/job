@@ -5,8 +5,9 @@ import { isDeadReq, keyOf, loadApplied, markApplied, setStatus, unmarkApplied, w
 import { loadDescriptions, loadIndex, type Index } from './lib/data'
 import { boardCount } from './lib/dedupe'
 import { defaultLanes, describeRule, LANES_VERSION, mkRule, runNet, topBaseline, type Net, type Rule } from './lib/nets'
-import { AXIS_LABELS, rank, variantFor, type AxisId } from './lib/score'
+import { AXIS_LABELS, FIT, LOGISTICS, LOGISTICS_SHARE, rank, variantFor, type AxisId, type Ctx } from './lib/score'
 import { PER_EMPLOYER, topJobs, type TopEntry } from './lib/top'
+import { commuteOf } from './lib/commute'
 import { easeScore } from './lib/ease'
 import { loadSettings, saveSettings, type Settings } from './lib/settings'
 import { read, write } from './lib/storage'
@@ -21,7 +22,10 @@ export default function App() {
   const [index, setIndex] = useState<Index | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [settings, setSettings] = useState<Settings>(loadSettings)
-  const [nets, setNets] = useState<Net[]>(() => loadNets(loadSettings().floorHourly))
+  const [nets, setNets] = useState<Net[]>(() => {
+    const s = loadSettings()
+    return loadNets(s.floorHourly, s.maxMinutes)
+  })
   const [laneId, setLaneId] = useState<string>(() => read<string>('job.lane.v1', 'easy'))
   const [applied, setApplied] = useState<AppliedLog>(() => withGhosting(loadApplied()))
   const [view, setView] = useState<View>(() => read<View>('job.view.v1', 'top'))
@@ -50,6 +54,17 @@ export default function App() {
   useEffect(() => void write('job.verdicts.v1', verdicts), [verdicts])
   useEffect(() => void write('job.letters.v1', letters), [letters])
 
+  /**
+   * What the axes need that is not on the job. Rebuilt only when the settings
+   * that feed it change — `now` is in here because the seasonal industry rule
+   * depends on it, and a fresh Date on every render would rerank the list on
+   * every keystroke.
+   */
+  const ctx: Ctx = useMemo(
+    () => ({ floorHourly: settings.floorHourly, maxMinutes: settings.maxMinutes, now: new Date() }),
+    [settings.floorHourly, settings.maxMinutes],
+  )
+
   const lane = nets.find((n) => n.id === laneId) ?? nets[0]
   const appliedKeys = useMemo(() => new Set(Object.keys(applied)), [applied])
   const jobs = index?.jobs ?? []
@@ -73,17 +88,17 @@ export default function App() {
   }, [filtered, query])
 
   const sorted = useMemo(() => {
-    const withScore = searched.map((j) => ({ j, s: rank(j, settings.profile, settings.weights).score }))
+    const withScore = searched.map((j) => ({ j, s: rank(j, settings.profile, settings.weights, ctx).score }))
     const cmp: Record<Sort, (a: (typeof withScore)[0], b: (typeof withScore)[0]) => number> = {
       fit: (a, b) => b.s - a.s,
-      commute: (a, b) => (a.j.miles ?? 9e9) - (b.j.miles ?? 9e9),
+      commute: (a, b) => minutesOf(a.j) - minutesOf(b.j),
       pay: (a, b) => payOf(b.j) - payOf(a.j),
       newest: (a, b) => (b.j.postedAt ?? '').localeCompare(a.j.postedAt ?? ''),
       title: (a, b) => a.j.title.localeCompare(b.j.title),
       gettable: (a, b) => easeScore(b.j) - easeScore(a.j),
     }
     return [...withScore].sort(cmp[sort]).map((x) => x.j)
-  }, [searched, sort, settings])
+  }, [searched, sort, settings, ctx])
 
   useEffect(() => setLimit(PAGE), [laneId, query, sort])
   useEffect(() => setGroupOverrides({}), [laneId, query, sort])
@@ -105,9 +120,9 @@ export default function App() {
     return [...byCompany.entries()].map(([company, jobs]) => ({
       company,
       jobs,
-      best: Math.max(...jobs.map((j) => rank(j, settings.profile, settings.weights).score)),
+      best: Math.max(...jobs.map((j) => rank(j, settings.profile, settings.weights, ctx).score)),
     }))
-  }, [sorted, grouped, settings])
+  }, [sorted, grouped, settings, ctx])
 
   /** Small groups sit open; a big one folds shut so it cannot own the screen. */
   const FOLD_AT = 4
@@ -156,7 +171,7 @@ export default function App() {
     for (const [i, job] of chosen.entries()) {
       setBusy(`Writing ${i + 1} of ${chosen.length}: ${job.title}`)
       try {
-        const text = await coverLetter(hydrate(job), variantFor(job), settings.apiKey)
+        const text = await coverLetter(hydrate(job), variantFor(job, ctx.now), settings.apiKey)
         setLetters((prev) => ({ ...prev, [job.id]: text }))
       } catch (e) {
         setBusy(`Stopped on ${job.title}: ${(e as Error).message}`)
@@ -172,8 +187,8 @@ export default function App() {
    * ranked without regard to which lane a job belongs to.
    */
   const best = (() => {
-    const pool = runNet(jobs, topBaseline(settings.floorHourly), appliedKeys, keyOf).jobs
-    return topJobs(pool, settings.profile, settings.weights, { limit: 80 })
+    const pool = runNet(jobs, topBaseline(settings.floorHourly, settings.maxMinutes), appliedKeys, keyOf).jobs
+    return topJobs(pool, settings.profile, settings.weights, { limit: 80, ctx })
   })()
 
   const renderRow = (job: Job) => (
@@ -182,6 +197,7 @@ export default function App() {
         job={hydrate(job)}
         profile={settings.profile}
         weights={settings.weights}
+        ctx={ctx}
         applied={appliedKeys.has(keyOf(job))}
         selected={selected.has(job.id)}
         expanded={expanded.has(job.id)}
@@ -250,6 +266,15 @@ export default function App() {
                 <option value="gettable">gettable</option>
               </select>
             </div>
+            {/* A starting point, not a permanent fixture: the row gives its
+                space back the moment there is a search to read instead. */}
+            {!query && (
+              <div className="flex gap-1 overflow-x-auto px-3 pb-2">
+                {PRIORITY_TITLES.map((t) => (
+                  <button key={t} onClick={() => setQuery(t)} className="chip shrink-0 text-[11px]">{t}</button>
+                ))}
+              </div>
+            )}
             <div className="flex items-center gap-3 px-3 pb-2 text-[11px]">
               <button onClick={() => setShowStack(!showStack)} style={{ color: 'var(--accent)' }}>
                 {showStack ? 'hide' : 'show'} the {lane.rules.length} rules
@@ -330,6 +355,7 @@ export default function App() {
           entries={best}
           profile={settings.profile}
           weights={settings.weights}
+          ctx={ctx}
           applied={appliedKeys}
           descs={descs}
           expanded={expanded}
@@ -350,7 +376,7 @@ export default function App() {
             setSettings(next)
             saveSettings(next)
           }}
-          onResetLanes={() => setNets(defaultLanes(settings.floorHourly))}
+          onResetLanes={() => setNets(defaultLanes(settings.floorHourly, settings.maxMinutes))}
         />
       )}
     </Shell>
@@ -358,11 +384,38 @@ export default function App() {
 }
 
 /** Stored lanes are replaced when the shipped set changes; see LANES_VERSION. */
-function loadNets(floor: number): Net[] {
+function loadNets(floor: number, maxMinutes: number): Net[] {
   const stored = read<{ version?: number; nets?: Net[] } | Net[]>('job.nets.v1', [])
   const isCurrent = !Array.isArray(stored) && stored.version === LANES_VERSION && Array.isArray(stored.nets)
-  return isCurrent ? (stored as { nets: Net[] }).nets : defaultLanes(floor)
+  return isCurrent ? (stored as { nets: Net[] }).nets : defaultLanes(floor, maxMinutes)
 }
+
+/**
+ * The titles worth searching first, in the order the case file lists them.
+ * A row of one-tap searches rather than a taxonomy: they cut across the lanes
+ * and they are what he would type anyway, on a phone, with one thumb.
+ */
+const PRIORITY_TITLES = [
+  'administrative assistant', 'office assistant', 'program coordinator', 'operations coordinator',
+  'program assistant', 'department coordinator', 'scheduler', 'records', 'data entry',
+  'patient access', 'front desk', 'facilities coordinator', 'office manager', 'executive assistant',
+  'warehouse associate', 'inventory', 'receiving', 'mailroom', 'logistics coordinator',
+  'intake specialist', 'library assistant', 'archives', 'communications coordinator',
+  'marketing coordinator', 'content coordinator', 'production assistant', 'event coordinator',
+  'audio visual', 'it support', 'helpdesk', 'junior analyst', 'qa', 'custodian', 'groundskeeper',
+]
+
+/**
+ * Sorting by commute means sorting by the drive, not by the crow.
+ *
+ * A remote job sorts LAST, not first. Treating "no commute" as zero minutes
+ * filled the entire first screen of a commute-sorted list with remote postings
+ * — the one shape of job the rest of this app is built to push down — and none
+ * of them renders a drive time, so the browser check measuring the sort found
+ * nothing to measure and passed on an empty array.
+ */
+const NO_COMMUTE = 9e9
+const minutesOf = (j: Job) => commuteOf(j).minutes ?? NO_COMMUTE
 
 const payOf = (j: Job) => {
   if (!j.pay) return -1
@@ -466,11 +519,12 @@ function VerdictBlock({ verdict, letter }: { verdict?: Verdict; letter?: string 
 }
 
 function TopView({
-  entries, profile, weights, applied, descs, expanded, selected, onToggleExpand, onToggleSelect, onApply, appliedLog,
+  entries, profile, weights, ctx, applied, descs, expanded, selected, onToggleExpand, onToggleSelect, onApply, appliedLog,
 }: {
   entries: TopEntry[]
   profile: import('./lib/requirements').Profile
   weights: import('./lib/score').Weights
+  ctx: Ctx
   applied: Set<string>
   descs: Record<string, string>
   expanded: Set<string>
@@ -495,6 +549,7 @@ function TopView({
               job={descs[e.job.id] ? { ...e.job, descText: descs[e.job.id] } : e.job}
               profile={profile}
               weights={weights}
+              ctx={ctx}
               applied={applied.has(keyOf(e.job))}
               selected={selected.has(e.job.id)}
               expanded={expanded.has(e.job.id)}
@@ -583,7 +638,7 @@ function SettingsView({ settings, onChange, onResetLanes }: { settings: Settings
       </Field>
       <div className="grid grid-cols-2 gap-3">
         <Field label="Pay floor ($/hr)"><input type="number" value={settings.floorHourly} onChange={(e) => set('floorHourly', Number(e.target.value))} className={input} /></Field>
-        <Field label="Radius (miles)"><input type="number" value={settings.miles} onChange={(e) => set('miles', Number(e.target.value))} className={input} /></Field>
+        <Field label="Commute (minutes)"><input type="number" value={settings.maxMinutes} onChange={(e) => set('maxMinutes', Number(e.target.value))} className={input} /></Field>
         <Field label="Years of experience"><input type="number" value={settings.profile.years} onChange={(e) => set('profile', { ...settings.profile, years: Number(e.target.value) })} className={input} /></Field>
         <Field label="Clearance">
           <select value={settings.profile.clearance} onChange={(e) => set('profile', { ...settings.profile, clearance: e.target.value as 'none' | 'obtainable' | 'active' })} className={input}>
@@ -592,14 +647,22 @@ function SettingsView({ settings, onChange, onResetLanes }: { settings: Settings
           </select>
         </Field>
       </div>
-      <div>
-        <p className="mb-1 text-[11px] uppercase tracking-wide faint">Weights — the default weighting is an argument, not a fact</p>
-        {(Object.keys(settings.weights) as AxisId[]).map((id) => (
-          <label key={id} className="flex items-center gap-2 py-0.5 text-xs">
-            <span className="w-32 muted">{AXIS_LABELS[id]}</span>
-            <input type="range" min={0} max={4} step={0.5} value={settings.weights[id]} onChange={(e) => set('weights', { ...settings.weights, [id]: Number(e.target.value) })} className="flex-1" />
-            <span className="tabular w-6">{settings.weights[id]}</span>
-          </label>
+      <div className="space-y-3">
+        <p className="text-[11px] faint">
+          Logistics carry {Math.round(LOGISTICS_SHARE * 100)}% of the fit and the job itself {Math.round((1 - LOGISTICS_SHARE) * 100)}%.
+          Within each group the weighting is an argument, not a fact.
+        </p>
+        {([['Logistics', LOGISTICS], ['The job itself', FIT]] as const).map(([heading, ids]) => (
+          <div key={heading}>
+            <p className="mb-1 text-[11px] uppercase tracking-wide faint">{heading}</p>
+            {ids.map((id: AxisId) => (
+              <label key={id} className="flex items-center gap-2 py-0.5 text-xs">
+                <span className="w-32 muted">{AXIS_LABELS[id]}</span>
+                <input type="range" min={0} max={4} step={0.5} value={settings.weights[id]} onChange={(e) => set('weights', { ...settings.weights, [id]: Number(e.target.value) })} className="flex-1" />
+                <span className="tabular w-6">{settings.weights[id]}</span>
+              </label>
+            ))}
+          </div>
         ))}
       </div>
       <button onClick={onResetLanes} className="chip">reset lanes to defaults</button>

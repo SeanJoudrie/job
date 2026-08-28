@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Job } from '../../types'
 import type { Profile } from '../requirements'
-import { axesFor, DEFAULT_WEIGHTS, GETTABLE_SHARE, IMPOSSIBLE_CEILING, rawFit, scoreOf, variantFor } from '../score'
+import { axesFor, DEFAULT_WEIGHTS, EXCLUDED_CEILING, FIT, GETTABLE_SHARE, IMPOSSIBLE_CEILING, LOGISTICS, LOGISTICS_SHARE, logisticsOf, rank, rawFit, scoreOf, variantFor } from '../score'
 import { easeScore } from '../ease'
 
 const SEAN: Profile = { years: 5, degree: 'bachelor', clearance: 'none' }
@@ -14,7 +14,7 @@ const job = (over: Partial<Job> = {}): Job => ({
 })
 const axis = (j: Job, id: string) => axesFor(j, SEAN).find((a) => a.id === id)!
 
-describe('the container axis, which carries the most weight', () => {
+describe('the container axis', () => {
   it('punishes fully remote hard', () => {
     expect(axis(job({ remote: true }), 'container').score).toBeLessThan(3)
   })
@@ -90,7 +90,7 @@ describe('liveness is a down-rank, never a disappearance', () => {
 describe('the total', () => {
   it('is the weighted mean of parts you can see', () => {
     const axes = axesFor(job(), SEAN)
-    expect(axes).toHaveLength(7)
+    expect(axes).toHaveLength(LOGISTICS.length + FIT.length)
     const s = scoreOf(axes)
     expect(s).toBeGreaterThanOrEqual(0)
     expect(s).toBeLessThanOrEqual(10)
@@ -177,5 +177,99 @@ describe('a job you cannot get is not a good job', () => {
     })
     const plain = job({ sector: 'tech', title: 'Program Coordinator', descText: 'Work closely with the team on site.' })
     expect(rawFit(axesFor(sponsors, SEAN))).toBeGreaterThan(rawFit(axesFor(plain, SEAN)))
+  })
+})
+
+describe('logistics outrank industry', () => {
+  // "A Tier C role at $28/hr twenty minutes away beats a Tier A role at $21/hr
+  // in Boston." The case file states the trade in exactly those terms, so it is
+  // worth asserting on exactly those two jobs.
+  const near = job({
+    sector: 'health', title: 'Patient Access Representative', miles: 6,
+    pay: { min: 26, max: 28, period: 'hour', raw: '' },
+    descText: 'Monday through Friday, day shift. Work closely with the team on site.',
+  })
+  const far = job({
+    sector: 'university', title: 'Program Coordinator', miles: 10.3,
+    locations: [{ raw: 'Boston, MA', city: 'Boston', state: 'MA', remote: false, hybrid: false, miles: 10.3 }],
+    pay: { min: 19, max: 21, period: 'hour', raw: '' },
+    descText: 'Monday through Friday, day shift. Work closely with the team on site.',
+  })
+
+  it('splits the fit sixty-forty', () => {
+    expect(LOGISTICS_SHARE).toBe(0.6)
+    expect([...LOGISTICS, ...FIT].sort()).toEqual([...new Set([...LOGISTICS, ...FIT])].sort())
+  })
+
+  it('puts the well-paid nearby Tier C role above the underpaid Tier A one', () => {
+    expect(rank(far, SEAN).industry.weight).toBeGreaterThan(rank(near, SEAN).industry.weight)
+    expect(rank(near, SEAN).score).toBeGreaterThan(rank(far, SEAN).score)
+  })
+
+  it('pay and commute both move the logistics number on their own', () => {
+    const paid = job({ ...near, pay: { min: 40, max: 44, period: 'hour', raw: '' } })
+    expect(logisticsOf(axesFor(paid, SEAN))).toBeGreaterThan(logisticsOf(axesFor(near, SEAN)))
+    const further = job({ ...near, miles: 30 })
+    expect(logisticsOf(axesFor(further, SEAN))).toBeLessThan(logisticsOf(axesFor(near, SEAN)))
+  })
+})
+
+describe('posture, which the case file asks to be weighted heavily', () => {
+  const seated = job({ title: 'Records Clerk', descText: 'Sedentary work in an office environment.' })
+  const moving = job({ title: 'Warehouse Associate', descText: 'Frequently walk and stand; lifting up to 50 lbs.' })
+  const standing = job({ title: 'Greeter', descText: 'Must be able to stand for long periods.' })
+
+  it('scores seated and moving alike, and standing still worst', () => {
+    const of = (j: Job) => axesFor(j, SEAN).find((a) => a.id === 'posture')!.score
+    expect(of(seated)).toBeGreaterThan(8)
+    expect(of(moving)).toBeGreaterThan(8)
+    expect(of(standing)).toBeLessThan(3)
+  })
+})
+
+describe('a Tier E job cannot rank, even with the rule switched off', () => {
+  it('is capped whatever else it has going for it', () => {
+    const excluded = job({
+      sector: 'university', title: 'Claims Adjuster', miles: 4,
+      pay: { min: 40, max: 45, period: 'hour', raw: '' },
+      descText: 'Monday through Friday. Work closely with the team on site. Hiring immediately, will train.',
+    })
+    const r = rank(excluded, SEAN)
+    expect(r.industry.excluded).toBe(true)
+    expect(r.score).toBeLessThanOrEqual(EXCLUDED_CEILING)
+  })
+})
+
+describe('which resume goes out, by tier', () => {
+  it('full for a Tier A institution even when the title is generic', () => {
+    expect(variantFor(job({ sector: 'university', company: 'Berklee', title: 'Office Assistant' }))).toBe('full')
+  })
+  it('stripped for Tier C and D', () => {
+    expect(variantFor(job({ title: 'Custodian' }))).toBe('stripped')
+    expect(variantFor(job({ title: 'Warehouse Associate' }))).toBe('stripped')
+  })
+})
+
+describe('the two benefits that are worth money', () => {
+  // "Do NOT weight health benefits heavily. $28/hr without beats $22/hr with.
+  // Exception: free meals or tuition remission have real value."
+  const pay = (j: Job) => axesFor(j, SEAN).find((a) => a.id === 'pay')!
+  const base = job({ pay: { min: 28, max: 30, period: 'hour', raw: '' }, descText: 'A role at the university.' })
+
+  it('counts tuition remission and staff meals', () => {
+    const tuition = job({ ...base, descText: 'A role at the university. Tuition remission for you and your family.' })
+    expect(pay(tuition).score).toBeGreaterThan(pay(base).score)
+    expect(pay(tuition).why).toMatch(/tuition or meals/)
+  })
+
+  it('does not count health cover, which TRICARE already provides', () => {
+    const health = job({ ...base, descText: 'A role at the university. Comprehensive medical, dental and vision insurance.' })
+    expect(pay(health).score).toBe(pay(base).score)
+  })
+
+  it('never lets a benefit outweigh the wage itself', () => {
+    const rich = job({ pay: { min: 34, max: 36, period: 'hour', raw: '' }, descText: 'A role.' })
+    const poorWithPerks = job({ pay: { min: 25, max: 26, period: 'hour', raw: '' }, descText: 'Free meals and tuition remission.' })
+    expect(pay(rich).score).toBeGreaterThan(pay(poorWithPerks).score)
   })
 })

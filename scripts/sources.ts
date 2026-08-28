@@ -1,4 +1,5 @@
 import type { Job, Source } from '../src/types'
+import { LICENSED_CLINICAL } from '../src/lib/industry'
 import type { Board } from '../src/lib/companies'
 
 /** Greenhouse double-escapes its HTML, so entities have to come off first. */
@@ -83,13 +84,17 @@ const iso = (v: unknown): string | null => {
 export type Keep = (locationRaw: string) => boolean
 
 /**
- * Roles requiring a clinical licence this profile does not hold and cannot get
- * quickly. A hospital system posts thousands of them, and each one costs a
- * description request. Skipped at the source rather than filtered later, so the
- * scan does not spend ten minutes fetching jobs nobody can apply for.
+ * Roles requiring a clinical licence or certification this profile does not
+ * hold. A hospital system posts thousands of them and each one costs a
+ * description request, so they are skipped at the source rather than filtered
+ * later — the scan does not spend ten minutes fetching jobs nobody can apply
+ * for.
+ *
+ * The list itself lives with the industry table, so the scan and the scoring
+ * cannot disagree about what is clinical. They did, and a surgical technologist
+ * post reached the top twenty because of it.
  */
-const LICENSED = /\b(?:registered nurse|\brn\b|\blpn\b|nurse practitioner|\bnp\b|physician|surgeon|\bmd\b|resident physician|pharmacist|physical therapist|occupational therapist|speech pathologist|radiolog(?:ist|ic technologist)|sonographer|anesthesi|perfusionist|phlebotom|respiratory therapist|nurse anesthetist|midwife|dentist|optometrist|psychiatrist|clinical psychologist|social worker \(licsw\)|\blicsw\b|\bcrna\b|\bpa-c\b)\b/i
-export const isLicensedClinical = (title: string) => LICENSED.test(title)
+export const isLicensedClinical = (title: string) => LICENSED_CLINICAL.test(title)
 
 export async function fetchBoard(board: Board, keep: Keep = () => true): Promise<Raw[]> {
   if (board.ats === 'workday') return fetchWorkday(board, keep)

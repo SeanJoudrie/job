@@ -77,6 +77,13 @@ export type Job = {
    * reachability axis to a constant. The counts survive the trim.
    */
   gaps?: { matched: number; soft: number; hard: number; unstated: number }
+  /**
+   * Case-file industry, classified at scan time from the FULL description.
+   * Only the id is stored: the weight is resolved at read time because the
+   * seasonal rule depends on today's date, and a scan from October must not
+   * still be paying out 6.5 for groundskeeping in January.
+   */
+  industry?: { id: string; why: string }
 }
 
 export type Applied = {

@@ -1,6 +1,6 @@
 import type { Job } from '../types'
 import { normaliseCompany, normaliseTitle } from './dedupe'
-import { rank, type Weights } from './score'
+import { defaultCtx, rank, type Ctx, type Weights } from './score'
 import type { Profile } from './requirements'
 
 /**
@@ -53,11 +53,11 @@ export function topJobs(
   jobs: Job[],
   profile: Profile,
   weights: Weights,
-  { limit = 60, perEmployer = PER_EMPLOYER }: { limit?: number; perEmployer?: number } = {},
+  { limit = 60, perEmployer = PER_EMPLOYER, ctx = defaultCtx() }: { limit?: number; perEmployer?: number; ctx?: Ctx } = {},
 ): TopEntry[] {
   const ranked = jobs
     .map((job) => {
-      const r = rank(job, profile, weights)
+      const r = rank(job, profile, weights, ctx)
       return { job, score: r.score, fit: r.fit, gettable: r.gettable.score }
     })
     .sort((a, b) => b.score - a.score)

@@ -44,7 +44,22 @@ export type Ease = { score: number; why: string[] }
  */
 const spread = (raw: number) => Math.round((10 / (1 + Math.exp(-(raw - 5) / 3.5))) * 10) / 10
 
+/**
+ * Memoised for the same reason the industry table is: this runs once per job
+ * per lane count, once more in the ranking, and again for the gettable sort.
+ * Keyed on the job object, so a copy carrying a full description recomputes.
+ */
+const memo = new WeakMap<Job, Ease>()
+
 export function easeOf(job: Job): Ease {
+  const hit = memo.get(job)
+  if (hit) return hit
+  const out = compute(job)
+  memo.set(job, out)
+  return out
+}
+
+function compute(job: Job): Ease {
   const text = job.descText || job.preview || ''
   const why: string[] = []
   let score = 5
@@ -55,13 +70,23 @@ export function easeOf(job: Job): Ease {
   else if (sector > 0) why.push(`${job.sector} employer — usually a shorter process`)
 
   // Pay is the clearest proxy for how many people are competing.
+  //
+  // Smooth, and deliberately so. The first version stepped: +2 below $70k, 0
+  // above it, which put a two-point cliff at $33.65 an hour — the middle of the
+  // band actually being searched. Two nearly identical warehouse jobs came out
+  // a point and a half apart on nothing but which side of the step they fell,
+  // and because gettability carries a quarter of the final number, the pay axis
+  // ended up correlating with the score at −0.47. Paying better made a job
+  // score worse.
   if (job.pay) {
     const top = job.pay.max ?? job.pay.min
     if (top !== null) {
       const annual = toAnnual(top, job.pay.period)
-      if (annual >= 130_000) { score -= 3; why.push('pays six figures — heavily competed') }
-      else if (annual >= 95_000) { score -= 1; why.push('pays well — competitive') }
-      else if (job.pay.period === 'hour' && annual < 70_000) { score += 2; why.push('hourly role') }
+      const adj = Math.max(-3, Math.min(1.5, 1.5 - (4.5 * (annual - 60_000)) / 70_000))
+      score += adj
+      if (adj <= -2) why.push('pays six figures — heavily competed')
+      else if (adj < -0.5) why.push('pays well — competitive')
+      else if (adj > 0.5) why.push('in the high-volume hiring band')
     }
   }
 

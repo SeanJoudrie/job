@@ -1,6 +1,7 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync, statSync } from 'node:fs'
 import { BOARDS } from '../src/lib/companies'
 import { dedupe } from '../src/lib/dedupe'
+import { industryOf } from '../src/lib/industry'
 import { HOME, isRemote, nearestMiles, parseLocations } from '../src/lib/location'
 import { parsePay } from '../src/lib/pay'
 import { countGaps, gapsFor, parseRequirements } from '../src/lib/requirements'
@@ -254,6 +255,12 @@ async function main() {
    * shown or filtered on. Requirement lines classified `other` were another
    * 62% of the rest and render as "not something the profile can answer", so
    * they stay in the descriptions rather than the index.
+   *
+   * The industry classification goes the same way as the gap counts: worked out
+   * here against the full description and stored, because the evidence that
+   * separates a museum's Collections Specialist from a debt collector is in the
+   * body and the body does not survive the trim. Only the id is stored — the
+   * weight depends on the month it is read in.
    */
   const index = merged.map(({ descText, locations, requirements, ...rest }) => {
     const resolved = locations.filter((l) => typeof l.miles === 'number')
@@ -265,6 +272,9 @@ async function main() {
       requirements: requirements.filter((r) => r.kind !== 'other'),
       // Counted from the full list, before the trim below throws text away.
       gaps: countGaps(gapsFor(requirements, PROFILE)),
+      industry: (({ id, why }) => ({ id, why }))(
+        industryOf({ title: rest.title, company: rest.company, body: descText, sector: rest.sector, families: rest.families }),
+      ),
       preview: descText.slice(0, 280),
     }
   })

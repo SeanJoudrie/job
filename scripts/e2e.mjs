@@ -58,8 +58,8 @@ check('and no employer takes more than three places', worst > 0 && worst <= 3, J
 const belowFloor = await page.evaluate(() =>
   [...document.querySelectorAll('li:has(> div > input)')].slice(0, 20)
     .map((li) => li.textContent ?? '')
-    .filter((t) => { const m = t.match(/\$([\d.]+)[–-]\$([\d.]+)\/hr/); return m && Number(m[2]) < 26 }).length)
-check('nothing below the pay floor is recommended', belowFloor === 0, `${belowFloor} under $26/hr`)
+    .filter((t) => { const m = t.match(/\$([\d.]+)[–-]\$([\d.]+)\/hr/); return m && Number(m[2]) < 25 }).length)
+check('nothing below the pay floor is recommended', belowFloor === 0, `${belowFloor} under $25/hr`)
 
 await page.getByRole('button', { name: 'pool' }).click()
 await page.waitForTimeout(600)
@@ -97,6 +97,18 @@ await page.waitForSelector('nav')
 const laneNames = await laneChips.allInnerTexts()
 check('an old saved lane set is replaced by the shipped one', !laneNames.some((t) => /Stale lane/.test(t)) && laneNames.length > 8,
   `${laneNames.length} lanes after a stale set was planted`)
+
+// The case file flags one search as never having been run: a Tier A employer
+// and a job that involves writing or making something. It now has a lane.
+const crossoverChip = laneChips.filter({ hasText: 'Crossover' })
+check('the crossover search has a lane of its own', (await crossoverChip.count()) === 1)
+await crossoverChip.click()
+await page.waitForTimeout(600)
+const crossoverCount = await showing()
+check('and it returns actual jobs', crossoverCount > 0, `${crossoverCount} in Crossover`)
+
+// The lane the case file scores at zero is gone. I built it before reading it.
+check('the public safety lane is gone', !laneNames.some((t) => /Public safety/.test(t)))
 
 // Light, always — this is read outdoors, and a phone flipping to dark at dusk
 // changed the app out from under its owner.
@@ -157,7 +169,11 @@ await page.waitForTimeout(400)
 await page.getByRole('button', { name: /show the \d+ rules/ }).click()
 await page.waitForTimeout(200)
 const stackText = await page.locator('.panel').first().innerText()
-check('the stack lists its rules with counts', /within 25 miles/.test(stackText), stackText.split('\n').slice(0, 3).join(' / '))
+// The commute is stated in minutes, which is the constraint. A mile radius
+// admitted a fifty-minute drive as though it were a commute.
+check('the stack lists its rules with counts', /within \d+ min of home/.test(stackText), stackText.split('\n').slice(0, 3).join(' / '))
+check('and it names the hard exclusions it applies', /Tier E/.test(stackText) && /front-line service under \$\d+/.test(stackText),
+  stackText.split('\n').filter((l) => /Tier E|front-line/.test(l)).join(' / '))
 
 // A rule's cost, proven by adding one and taking it away again. Done on the
 // broadest lane, because in a narrow lane a later rule can already exclude
@@ -211,9 +227,14 @@ await page.waitForTimeout(500)
 // can actually be checked.
 await page.getByRole('button', { name: 'flat list' }).click()
 await page.waitForTimeout(600)
-const miles = (await rows().allInnerTexts()).map((t) => Number((t.match(/(\d+) mi/) ?? [])[1])).filter(Number.isFinite)
-const ascending = miles.every((m, i) => i === 0 || miles[i - 1] <= m)
-check('sorting by commute really is ascending', ascending, miles.slice(0, 10).join(','))
+const minutes = (await rows().allInnerTexts()).map((t) => Number((t.match(/(\d+) min/) ?? [])[1])).filter(Number.isFinite)
+const ascending = minutes.length > 0 && minutes.every((m, i) => i === 0 || minutes[i - 1] <= m)
+// `minutes.length > 0` is the point of the next line and half the point of
+// this one: remote jobs used to sort to the front, none of them states a drive
+// time, and `[].every()` is true — so this check passed for as long as it was
+// measuring nothing at all.
+check('sorting by commute really is ascending', ascending, minutes.slice(0, 10).join(','))
+check('and the commute is shown in minutes, not miles', minutes.length > 0, `${minutes.length} rows state a drive time`)
 
 await page.getByRole('button', { name: 'group by employer' }).click()
 await page.waitForTimeout(600)
@@ -223,7 +244,7 @@ const groupOrder = await page.evaluate(() => {
   const out = []
   for (const li of document.querySelectorAll('main > ul > li')) {
     const rows = [...li.querySelectorAll('li')]
-      .map((r) => Number((r.textContent?.match(/(\d+) mi/) ?? [])[1]))
+      .map((r) => Number((r.textContent?.match(/(\d+) min/) ?? [])[1]))
       .filter(Number.isFinite)
     if (rows.length) out.push(Math.min(...rows))
   }
@@ -244,6 +265,12 @@ await rows().first().locator('button[aria-expanded]').first().click()
 await page.waitForTimeout(600)
 const open = await rows().first().innerText()
 check('expanding shows the scoring axes', /Container/.test(open) && /Reachable/.test(open))
+// The four the case file puts first, and the tier table that replaced the old
+// hand-waved "domain pull" axis.
+check('including the logistics the case file leads with',
+  /Pay/.test(open) && /Commute/.test(open) && /Posture/.test(open) && /Hours/.test(open) && /Industry/.test(open))
+check('and the split between them', /logistics [\d.]+ · overall fit [\d.]+/.test(open),
+  (open.match(/logistics [^\n]*/) ?? [''])[0])
 check('and the requirement verdicts', /(met|soft|hard)/.test(open))
 check('and a link to the real posting', (await page.locator('a:has-text("open the posting")').count()) > 0)
 
@@ -294,6 +321,10 @@ await page.waitForTimeout(300)
 const setText = await page.locator('main').innerText()
 check('settings names the running build', /Build \d{4}-\d{2}-\d{2}/.test(setText), (setText.match(/Build .*/) ?? [''])[0])
 check('the pay floor is editable and on-device', /pay floor/i.test(setText))
+// The label is upper-cased in CSS, so innerText comes back shouting.
+check('the commute is set in minutes', /Commute \(minutes\)/i.test(setText))
+check('and the weights are grouped, so the 60/40 is visible', /Logistics carry 60%/.test(setText),
+  (setText.match(/Logistics carry[^\n]*/) ?? [''])[0])
 check('the weights are sliders, not fixed', (await page.locator('input[type="range"]').count()) >= 5)
 
 check('no page errors anywhere in that run', errors.length === 0, errors.slice(0, 2).join(' | '))

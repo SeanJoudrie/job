@@ -66,6 +66,25 @@ function inferPeriod(value: number): Period | null {
   return null
 }
 
+/**
+ * A period found in the text can be the wrong one.
+ *
+ * `periodNear` reads a 45-character window, and a posting will happily put
+ * "40 hours per week" and "$70,200 - $78,000" inside one. That produced a real
+ * band of $78,000 a WEEK, which annualises to $4m, reads as $1,950 an hour and
+ * put an accounts-payable job in the top twenty. Magnitude settles it where
+ * magnitude can: a five-figure number is a salary whatever word sits beside it.
+ *
+ * Only where the stated period would be absurd. A $2,000 weekly contract rate
+ * and a $500 day rate are both real and both stay as written.
+ */
+function reconcile(period: Period, value: number): Period {
+  const inferred = inferPeriod(value)
+  if (!inferred || inferred === period) return period
+  const annual = toAnnual(value, period)
+  return annual > 1_000_000 || annual < 5_000 ? inferred : period
+}
+
 export function parsePay(input: string): Pay {
   if (!input) return null
   let text = input
@@ -95,8 +114,10 @@ export function parsePay(input: string): Pay {
     const near = text.slice(Math.max(0, start - 30), Math.min(text.length, end + 22))
     if (NOT_PAY.test(near)) continue
 
+    const top = joined ? Math.max(a.value, b!.value) : a.value
     let period = periodNear(text, start, end)
-    if (!period) period = inferPeriod(joined ? Math.max(a.value, b!.value) : a.value)
+    if (period) period = reconcile(period, top)
+    else period = inferPeriod(top)
     if (!period) continue
 
     // "up to X" is a ceiling; "from X" / "starting at X" is a floor.
@@ -156,6 +177,18 @@ export function toAnnual(value: number, period: Period): number {
 }
 
 export const hourlyToAnnual = (hourly: number) => hourly * HOURS_PER_YEAR
+
+/**
+ * The top of the band in dollars an hour, whatever unit the posting used.
+ * The top, not the bottom, for the same reason `meetsFloor` uses it: a band
+ * opening below the floor is a negotiation, not a rejection.
+ */
+export function topHourly(pay: Pay): number | null {
+  if (!pay) return null
+  const top = pay.max ?? pay.min
+  if (top === null) return null
+  return toAnnual(top, pay.period) / HOURS_PER_YEAR
+}
 
 /**
  * Does this clear the floor?

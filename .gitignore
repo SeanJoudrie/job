@@ -5,3 +5,4 @@ dist
 
 # Rebuilt on every scan; only data/history.json is worth keeping.
 public/data/
+tsconfig.tsbuildinfo

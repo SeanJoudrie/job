@@ -95,9 +95,20 @@ describe('roles that need a licence nobody here holds', () => {
     for (const t of ['Registered Nurse - ICU', 'Nurse Practitioner, Cardiology', 'Physical Therapist (Outpatient)', 'Staff Pharmacist'])
       expect(isLicensedClinical(t)).toBe(true)
   })
+  it('counts certification, not only licensure', async () => {
+    // "Surgical Tech, 36 hours/week, day shift" reached the top twenty of a
+    // list for someone who holds no certification, because the scan's copy of
+    // this list and the scoring table's copy had drifted apart. One list now.
+    const { isLicensedClinical } = await import('../../../scripts/sources')
+    for (const t of ['Surgical Tech, 36 hours/week', 'Surgical Technologist - Labor & Delivery', 'Data Entry Pharmacy Technician Mail Order',
+      'Medical Assistant - Float Pool', 'Certified Nursing Assistant', 'Patient Care Technician', 'MRI Technologist'])
+      expect(isLicensedClinical(t), t).toBe(true)
+  })
   it('but keeps the hospital jobs that are actually open to him', async () => {
     const { isLicensedClinical } = await import('../../../scripts/sources')
-    for (const t of ['Patient Access Representative', 'Program Coordinator', 'Food Service Aide', 'Unit Secretary', 'Medical Records Clerk'])
-      expect(isLicensedClinical(t)).toBe(false)
+    for (const t of ['Patient Access Representative', 'Program Coordinator', 'Food Service Aide', 'Unit Secretary', 'Medical Records Clerk',
+      // The coordinator who books the theatre is not the technologist in it.
+      'Surgical Services Coordinator - Orthopedics', 'Medical Administrative Assistant', 'Assistant Director, Nursing Programs'])
+      expect(isLicensedClinical(t), t).toBe(false)
   })
 })

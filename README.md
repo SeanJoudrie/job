@@ -3,8 +3,8 @@
 A personal job scanner. Rules you write and can read, instead of a feed that
 decides what you're allowed to see.
 
-**[SPEC.md](SPEC.md)** — how it works · **[PROFILE.md](PROFILE.md)** — what it
-works from · **[BUILD-PROMPT.md](BUILD-PROMPT.md)** — the standard it was built to
+**[SPEC.md](SPEC.md)** — how it works · **[PROFILE.md](PROFILE.md)** — the
+configuration it works from · **[BUILD-PROMPT.md](BUILD-PROMPT.md)** — the standard it was built to
 
 ## What it does
 
@@ -12,8 +12,13 @@ Scans the boards nightly, splits the result into lanes, and lets you narrow each
 one with a stack of rules that shows what every rule costs you. Nothing is
 filtered by anything you can't open and read.
 
+- **Logistics outrank industry.** Pay, commute, posture and hours carry 60% of
+  the fit; what the job actually is carries 40%. A Tier C role at $28/hr twenty
+  minutes away beats a Tier A role at $21/hr in Boston.
 - **Lanes, not one list.** A bridge job and a career job are optimised against
   different things; blended into one ranking, the result is wrong for both.
+- **A commute measured in minutes.** Not a mile radius — a radius admitted a
+  fifty-minute drive as though it were a commute.
 - **A visible funnel.** Every rule shows how many jobs it removed. Switch one
   off and they come back.
 - **Soft vs hard requirements.** "Bachelor's preferred, 5 years or equivalent"
@@ -35,9 +40,10 @@ npm run dev
 ```
 
 ```sh
-npm test         # 176 unit tests
+npm test         # 321 unit tests
 npm run build
-npm run preview & npm run e2e    # 26 browser checks
+npm run preview & npm run e2e    # browser checks
+npm run audit                    # measure the model against the real pool
 ```
 
 ## Federal jobs (optional)

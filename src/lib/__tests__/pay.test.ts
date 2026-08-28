@@ -131,3 +131,24 @@ describe('display', () => {
     expect(formatPay(p('Up to $80,000'))).toBe('up to $80k/yr')
   })
 })
+
+describe('a period word can be in the window and still be the wrong period', () => {
+  // Both of these are real postings. The window that finds "per week" or "per
+  // month" is 45 characters wide, and a benefits paragraph fits inside it.
+  it('reads $70,200 - $78,000 as a salary, not a weekly wage', () => {
+    const p = parsePay('Employees work 40 hours per week. Salary range: $70,200 - $78,000')
+    expect(p?.period).toBe('year')
+    expect(p?.max).toBe(78_000)
+  })
+
+  it('reads $166,000 - $220,000 as a salary, not a monthly one', () => {
+    const p = parsePay('Reviewed month over month. The salary range is $166,000 - $220,000')
+    expect(p?.period).toBe('year')
+  })
+
+  it('leaves a genuine weekly or daily rate alone', () => {
+    expect(parsePay('Contract rate of $2,000 per week')?.period).toBe('week')
+    expect(parsePay('Day rate: $500 per day')?.period).toBe('day')
+    expect(parsePay('$45 per hour')?.period).toBe('hour')
+  })
+})

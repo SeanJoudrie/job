@@ -24,6 +24,8 @@ export type Family = {
   ambiguous?: RegExp
   /** body evidence that settles an ambiguous title */
   tell?: RegExp
+  /** a title that looks like the family and is not */
+  not?: RegExp
   kind: 'exclude' | 'boost'
 }
 
@@ -54,7 +56,17 @@ export const FAMILIES: Family[] = [
   { id: 'technical', label: 'technical', kind: 'boost', titles: /\b(?:support engineer|solutions? (?:engineer|architect|consultant)|technical (?:support|account|program)|implementation|\bqa\b|quality assurance|software|developer|engineer)\b/i },
 
   // The areas named as genuine pulls rather than inferred from the resume.
-  { id: 'marketing', label: 'marketing & communications', kind: 'boost', titles: /\b(?:marketing|communications?|social media|content (?:manager|specialist|coordinator|strategist)|brand|public relations|\bpr\b|digital (?:marketing|media)|copywriter|outreach|engagement)\b/i },
+  {
+    id: 'marketing',
+    label: 'marketing & communications',
+    kind: 'boost',
+    titles: /\b(?:marketing|communications?|social media|content (?:manager|specialist|coordinator|strategist)|brand|public relations|\bpr\b|digital (?:marketing|media)|copywriter|outreach|engagement)\b/i,
+    // "Communications" is the word radios use. A Principal RF Communications
+    // Engineer at Draper and a Mission Software Engineer, Communications at
+    // Anduril both landed in marketing, and from there in a lane built for
+    // people who write for a living.
+    not: /\b(?:engineer|engineering|rf\b|radio ?frequency|antenna|waveform|satellite|firmware|hardware|network(?:ing)?|protocol|signals?|systems? engineer|technician)\b/i,
+  },
   { id: 'education', label: 'higher education', kind: 'boost', titles: /\b(?:student (?:affairs|services|success|life|activities|involvement)|academic (?:advisor|affairs|coordinator|services)|registrar|admissions|financial aid|residence (?:life|hall)|dean|campus|enrollment|orientation|alumni|faculty (?:support|affairs)|bursar|provost)\b/i },
   { id: 'mission', label: 'mission & nonprofit', kind: 'boost', titles: /\b(?:nonprofit|non-profit|development (?:officer|associate|coordinator|manager)|fundrais|donor|grants?|volunteer|community (?:outreach|engagement|organiz)|advocacy|case (?:manager|worker)|social services|youth (?:program|development|worker)|mentor|ministry|parish|diocese|chaplain|mission)\b/i },
   { id: 'outdoors', label: 'conservation & outdoors', kind: 'boost', titles: /\b(?:conservation|environmental|park (?:ranger|manager|coordinator)|ranger|land (?:steward|manager|protection)|trail|naturalist|steward(?:ship)?|sustainab|wildlife|ecolog|forestry|watershed|farm|garden|horticultur|outdoor)\b/i },
@@ -84,6 +96,7 @@ const SOLO = /\b(?:independent contributor|individual contributor role|self-?dir
 export function classifyFamilies(title: string, body: string, company = ''): string[] {
   const out = new Set<string>()
   for (const f of FAMILIES) {
+    if (f.not?.test(title)) continue
     if (f.titles.test(title)) {
       out.add(f.id)
       continue

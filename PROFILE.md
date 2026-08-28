@@ -1,191 +1,188 @@
-# Job search — profile
+# Job search — the configuration
 
-The half of the spec that is about the person rather than the machine. Kept in
-the repo by the owner's explicit decision; the pay floor in §2 is the one line
-with a concrete cost, since it is the number on the other side of any
-negotiation, and it can be moved to a device-only setting at any time.
+What the scanner is set to. Every number here is in the code, and the code
+points back here; if the two ever disagree the code is what runs, so fix the
+code.
 
-`SPEC.md` is how the tool works. This is what it is working from.
+The sensitive half of the source document — medical detail, weight, which
+employers have turned him down — is deliberately not in this repo. It changed
+what the rules are, not what they say.
 
 ---
 
-## 1. Logistics
+## 1. Logistics outrank industry
+
+**Roughly 60% logistics, 40% the job itself.** A Tier C role at $28/hr twenty
+minutes away beats a Tier A role at $21/hr in Boston.
 
 | | |
 |---|---|
-| Base | Wakefield, MA 01880 |
-| Radius | **25 miles, default on every lane.** Widen per lane, never start wide. |
-| Transport | Reliable car, will commute |
-| Availability | Now |
-| Moving | Apartment move in progress — radius anchor is a setting, change one field |
+| Pay floor | **$25/hr** (~$52k/yr). Absolute minimum, not a preference. |
+| Commute | **30 minutes by car.** Anywhere reachable by commuter rail or the T. |
+| Ideal hours | Strict 9–5, or an early shift, 6am–2pm |
+| Acceptable | Occasional late nights |
+| Unacceptable | Regular late nights, overnight shifts |
+| Employment type | Full-time, temp-to-hire and contract all welcome |
+| Benefits | Covered by TRICARE. Health benefits are **not** weighted. $28/hr without beats $22/hr with. Free meals and tuition remission are real money. |
+| Home | Wakefield, MA |
 
----
+`src/lib/commute.ts` turns straight-line miles into drive minutes, because the
+gazetteer gives one and the constraint is the other. Wakefield to Boston is 10.3
+miles direct and about 26 minutes, and the model is checked against that. The
+25-mile radius it replaced admitted a fifty-minute drive as though it were a
+commute.
 
-## 2. Money
+## 2. Hard exclusions
 
-| | |
+Out entirely, whatever the pay. `src/lib/industry.ts`, Tier E.
+
+- Sales of any kind, any commission component
+- Insurance — sales, claims, or adjacent
+- Gambling, telemarketing, collections
+- Police, fire, corrections, probation, emergency management and 911 dispatch
+- Transit operations, utilities, the trades and trade apprenticeships
+- Kitchens, food production, manufacturing and assembly lines
+- Nursing and clinical roles — no licence
+- Roles requiring a clearance **already held** (his lands around Aug 2027)
+- Outdoor work November to March
+- Retail and front-line customer service **unless $30/hr or more**
+
+Two of these reverse earlier decisions in this repo: there was a Public safety
+lane, and trade apprenticeships were deliberately left in as "a real route, not
+noise". Both are gone.
+
+The exclusions are lane rules, not invisible filters — they appear in the stack
+with a count, and switching one off brings its jobs back. A Tier E job still
+cannot rank above 3, so switching the rule off shows you the jobs without
+recommending them.
+
+## 3. Posture — weighted heavily
+
+**Either seated all day or moving all day. Standing still in one place is the
+worst case.** This rules out most retail, greeter and host work, and rules *in*
+both desk work and warehouse work.
+
+Postings state this more often than they state anything else useful, because the
+physical-requirements paragraph is a legal habit. `src/lib/posture.ts` reads
+that paragraph first and the title second.
+
+The trap: nearly every warehouse posting says "stand for long periods" and then
+says "walk, lift and move about" in the next clause. Reading the first half
+alone would zero out an entire acceptable tier, so a standing signal only counts
+against a job when there is no walking beside it.
+
+## 4. Work style
+
+- **Repetition is fine indefinitely, provided the system is coherent.** What is
+  not tolerable is improvised, undocumented, constantly-changing process. The
+  repetition was never the problem.
+- Comfortable with cleaning and custodial work at proper pay; with hostile or
+  difficult members of the public; with bureaucracy, forms, records and
+  compliance; with working alone all day if the pay is good.
+- Lean rather than strong. Physical work yes, wrecking his back no.
+- Prefers heat to cold. 100°F is fine.
+
+## 5. Industry weights
+
+`INDUSTRY_WEIGHT` in `src/lib/industry.ts`. Tier A is 8+, Tier E is 0.
+
+| Tier | |
 |---|---|
-| Interviewing at | **$28–34/hr** |
-| Default floor | **$26/hr** — the number every lane filters on |
-| What the local market pays | Coordination and admin within 25 miles opens around **$26** and tops around **$35**, middle half of tops **$32–41**. Across 360 non-senior, non-engineering roles the median band bottom is **$39**. |
-| Honest ask | **$30–34**, with $32 the number to say without flinching. $28 is entry money for work he has five years of. |
-| Note | 90% of local roles have a top above $28, so the floor is not what is limiting him — which is the constraint gettability now measures. |
-| Absolute floor | **$25/hr**, and only for a job scoring at the very top on fit |
-| Obligations | ~$2,000/month must be covered. This is the survival line, **not the wage target.** |
+| **A** | higher education administration **9** · museums & cultural institutions, media & creative production, publishing & editorial, graphic design, video & content production, archives & records, marketing operations **8.5** · K-12 non-teaching, municipal, state agency, events & AV **8** |
+| **B** | faith-based nonprofits 7.9 · legal support, HR & recruiting coordination 7.8 · conservation & land trusts, parks, environmental field work 7.2 · veterans services, software development, IT support, QA, data analysis 7 |
+| **C** | courts, libraries, hospital administration, facilities, custodial, groundskeeping 6.5 · warehouse & distribution, postal 6 |
+| **D** | hotel operations 5.7 · moving & delivery 5.5 · social services 5 |
+| **E** | everything in section 2, at 0 |
 
-$26/hr is roughly **$54,000/year** or **$4,500/month** at full time. Any posting
-in annual, monthly or weekly terms gets normalised to this before comparison.
+Three rules sit on top of the table:
 
-**Ranges are compared on their top, not their bottom.** A $22–30/hr posting stays
-in the list. A band starting under the floor is a negotiation, not a rejection,
-and filtering on the bottom throws away jobs that would have paid.
+- **The institutional boost.** Every industry above 8 is either a mission-driven
+  institution or creative work, and none of them is private-sector commercial.
+  So an institution lifts a generic title: an Administrative Assistant post at a
+  college is higher-education administration and scores 9. It lifts a role that
+  already has a tier of its own by at most **1.5** — taking the higher of the
+  two outright made "Recycling Services Driver" at Harvard a nine, ranking it
+  above the university's own administrative posts.
+- **The software-employer discount.** IT support, QA, junior analysis and
+  technical support are among the strongest options available *at
+  non-technology employers*, where he would be the most technically capable
+  person in the building. At a software company he is measured against career
+  engineers, so the same titles are capped at 5.5 there.
+- **The season.** Outdoor field work — groundskeeping, parks, environmental
+  survey — is 6.5 or 7.2 from April to October and **0** from November to March.
+  The weight is resolved when it is read, not when it is scanned, so a scan from
+  October is not still paying out for groundskeeping in January.
 
-**Postings with no pay listed stay in**, tagged as unknown. About half of all
-listings carry no number; excluding them to enforce a floor removes more good
-jobs than bad ones.
+**Federal agencies are scored at 8**, alongside state agencies. That is the one
+number here the source document does not give. Federal civil service is absent
+from its table, veterans' preference applies, and by the table's own stated
+pattern it is a mission-driven institution. Argue with this one first.
 
----
+## 6. Search
 
-## 3. Service and clearance
+The lanes are built from the table: Crossover, Coordination, Operations, Higher
+ed & schools, Creative & media, Library & museum, Records & archives,
+Government, Legal & HR, Health admin, IT & data, Warehouse & logistics,
+Facilities & custodial, Mission, Outdoors, Sponsors a clearance — plus Easy hire
+and Everything.
 
-- Army National Guard, **Officer Candidate School pipeline through ~August 2027**
-- One weekend a month plus annual training
-- Needs an employer for whom **USERRA is routine**, not a surprise
-- **No clearance currently.** Eligible for DoD Secret / Top Secret. Expected to
-  hold one in roughly a year.
+**Crossover** is the search flagged as never having been run: a Tier A employer
+and a job that involves writing or making something. "Communications coordinator
+university", "media assistant museum", "content producer nonprofit", "marketing
+coordinator college". He writes well and has never applied to this category.
 
-Two consequences for the tool:
+Parsing rules that have not changed and should not:
 
-1. Veteran-friendly, defense-adjacent and federal employers are **weighted
-   heavily up** — not as a nice-to-have but as a scoring axis.
-2. Clearance is written in every cover letter as **pending, never absent**:
-   eligible, in the pipeline, expected within ~12 months. It is an asset
-   arriving, and it reads as one when phrased that way.
+- **Do not filter on hard requirements.** Scan for "preferred", "or equivalent
+  experience", "willing to train". Reading a job description as a spec sheet is
+  how he self-selects out of jobs he would get.
+- Deprioritise postings reposted more than 30 days old — likely dead reqs.
+- Surface roles buried by algorithmic ranking. That is the whole point.
 
-`Must be able to obtain a Secret clearance` is a requirement **already met.**
-That one distinction is worth a large number of jobs inside the radius.
+## 7. Two resumes
 
----
+Rejected at both ends: ghosted by professional roles, and rejected as
+overqualified by hourly ones. `variantFor` picks on the industry tier.
 
-## 4. What actually predicts a good fit
+- **Variant A — full.** Tier A and B. Leads with the Verizon result — 28 months,
+  business-segment revenue 4.5x — then SNHU Student Involvement, Platoon Guide,
+  the degree, the certificates.
+- **Variant B — stripped.** Tier C and D. No honour society, no Yale
+  certificates, no "Senior Account Manager II" title; Verizon reframed as plain
+  work history. Reliability, physical capability, service, clean record,
+  immediate availability. Those three credentials read as flight risk and are
+  costing him offers.
 
-The strongest signal is not subject matter. It is whether the role puts you in a
-room with **the same people, repeatedly, on a schedule, with a defined task.**
+## 8. Service
 
-Every strong stretch has happened inside an externally structured container with
-consistent human contact. Every bad one has followed that container ending.
+Massachusetts Army National Guard, Officer Candidate. One weekend a month plus
+annual training; **drill dates are known well in advance but do not fall on a
+fixed recurring calendar date.** USERRA applies, and a letter should say so
+proactively rather than defensively.
 
-So:
+Commissions as 2LT around August 2027 and will hold a clearance then. "Must be
+able to obtain a clearance" is **already met** — that is a pending asset, not an
+absence, and it is the single largest advantage on the resume.
 
-- **Recurring in-person contact carries the highest weight of any axis.**
-- **Fully remote and solo roles are excluded by default**, regardless of pay or
-  title. Not down-ranked — excluded, with the toggle visible so it can be undone
-  deliberately rather than drifted into.
-- The social contact has to be **embedded in doing something together.** Not
-  sales-floor extraversion, not client-facing quota work.
+## 9. Experience gap
 
-This is also why the Wildcard section keeps the container rule. Without it,
-"easy money" surfaces solo overnight work — the worst answer wearing the costume
-of the easiest one.
-
----
-
-## 5. What a resume can't show
-
-- Reads power structures and social systems fast, then operates inside them.
-  Selected senior peer leader of a 220-person unit having arrived anonymous.
-- De-escalation; gets outcomes all parties can accept. People bring problems.
-- Exceptional recall for detail. Genuine intellectual independence. Comfortable
-  with ambiguity.
-- Enters an unfamiliar environment and is useful inside a week.
-- Self-taught full-stack; shipped products with no formal training.
-
-These map onto **program coordinator, operations, liaison, analyst** language
-almost directly, and none of them survive a resume skim. They belong in cover
-letters, in those terms.
-
----
-
-## 6. Fields
-
-**Pull toward** — intelligence and analysis (stated goal: MI 35-series) ·
-higher education administration · student affairs · operations and coordination ·
-program coordination · events and facilities · investigative and research work ·
-geopolitics-adjacent · anything where the role is connective tissue between
-groups.
-
-**Weight down** — commission-driven sales · pure remote · anything with no team ·
-roles where the whole job is enforcing rules on people.
-
----
-
-## 7. The two-ended rejection problem
-
-Rejected as **overqualified** for hourly work and **under-credentialed** for the
-roles above it. Both ends at once, which is why volume alone hasn't worked.
-
-**Two resume variants, picked by posting tier, always overridable:**
-
-| | Full | Stripped |
-|---|---|---|
-| Used for | professional / career roles | hourly and operations roles |
-| Honor society | keep | **remove** |
-| Certificate wall (Yale / IBM / Google) | keep | **remove** |
-| "Senior Account Manager II" | keep | **retitle** — reads as flight risk |
-
-**Both variants lead with: 28 months at Verizon, business-segment revenue 4.5x.**
-This is the strongest line available and it is habitually narrated as a failure.
-It leads unless a posting makes it irrelevant. This is a rule, not a preference.
-
-**Both variants carry:** Platoon Guide — selected peer leader, 58 soldiers — and
-unit SHARP representative. These are accountability, coordination, compliance,
-records and mediation credentials, and they map onto program-coordinator and
-operations language directly.
-
-**Apply to soft requirements.** "Preferred", "a plus", "or equivalent
-experience", "or related field" are open doors. Self-selecting out of those
-loses more jobs than any filter ever will. The tool separates soft gaps from
-hard ones and says which is which.
-
----
-
-## 8. Lanes and their defaults
-
-Wide net on purpose — employment is the goal — but split, so each can be
-tightened on its own terms.
-
-| Lane | Floor | Radius | Notes |
-|---|---|---|---|
-| **Easy hire** | $26 | 25 mi | Speed to hire matters most. Container weighted hardest. |
-| **Operations** | $26 | 25 mi | The five-year track. Highest expected hit rate. |
-| **Higher ed** | $26 | 25 mi | Already done and enjoyed. Watch academic hiring cycles. |
-| **Security** | $26 | 25 mi | `clearable` ON, `active clearance required` OFF. |
-| **Technology** | $28 | 25 mi | Skip hard CS-degree gates; portfolio counts here. |
-| **Analysis** | $26 | 25 mi, widenable | The direction. Worth applying at bad odds. |
-| **Federal** | GS equiv | 25 mi | Veteran preference surfaced, not buried. |
-
-**Bridge vs direction is the real split.** Easy hire / Operations / Higher ed pay
-rent this quarter. Security / Analysis / Federal are where the next few years
-go. Blending them into one ranked list produces something wrong for both.
-
----
-
-## 9. What the tool does with all this
-
-1. Scans overnight, commits results, so a fresh pool is waiting each morning
-2. Splits it into the lanes above, each with its own count
-3. Filters on rules that are visible and switch-off-able
-4. Scores on axes that are visible and reweightable — never one opaque number
-5. Separates soft requirement gaps from hard ones
-6. Flags reposted and stale reqs as likely dead
-7. Picks a resume variant by posting tier
-8. Writes a cover letter that leads correctly and never invents anything
-
----
+Software, IT and data: interest 10, formal experience low. These are **not**
+filtered out — they are tagged apply-anyway, entry-level and support-tier only.
+Four shipped applications built with AI-assisted tools; no traditional language
+fluency. No first aid, CPR, OSHA or forklift certification, so postings that say
+"preferred, will train" are worth flagging.
 
 ## 10. Still open
 
-- Whether stale postings are hidden or just down-ranked
-- Scan cadence — nightly, or twice daily
-- Whether "no pay listed" should be down-ranked rather than merely tagged
-- Where this file lives long-term: a private repo, or on the phone only
+- The board list is 40 employers and 64% of it is defence and software, which
+  the table scores low. Every Tier A employer worth adding — the MFA, the
+  Gardner, Mass Audubon, the Globe, Tufts, MIT, BU, the city and state — is
+  behind iCIMS, Paylocity, Taleo or NEOGOV, none of which publish a board that
+  can be read without an account. Berklee, Bentley and GBH were reachable and
+  are in. Library & museum, Records & archives, Government and Outdoors are
+  therefore near-empty lanes: correct rules with nothing to point at.
+- USAJOBS still needs its two repository secrets. Until they are set there are
+  no federal jobs at all, which is most of what Government would hold.
+- The commute axis barely discriminates. Almost every posting in the pool
+  resolves to "Boston, MA" and therefore to the same 10.3 miles, so the axis
+  works as a filter and does almost nothing as a ranking signal.
