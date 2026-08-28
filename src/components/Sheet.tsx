@@ -37,9 +37,7 @@ export function ResumeSheet({ pack, contact, dates }: { pack: Pack; contact: Con
       {resume.roles.map((r) => (
         <div key={`${r.org}-${r.title}`}>
           <h3>{r.title}</h3>
-          <p className="where">
-            {withBlanks(r.org)} · {r.dates}
-          </p>
+          <p className="where">{[r.org, r.where, r.dates].filter(Boolean).join(' · ')}</p>
           <ul>{r.bullets.map((b, i) => <li key={i}>{b}</li>)}</ul>
         </div>
       ))}

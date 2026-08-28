@@ -99,3 +99,46 @@ describe('the documents', () => {
     }
   })
 })
+
+describe('the documents say only what the resume says', () => {
+  // Every fact here was wrong in the first version, written before the real
+  // resume arrived. A resume that overstates is worse than one that omits: it
+  // gets found out in the interview, and it gets found out about the person
+  // rather than about the document.
+  const everything = PACKS.map((p) => JSON.stringify(resumeFor(p, DEFAULT_DATES)) + '\n' + letterFor(p)).join('\n')
+
+  it('does not claim a minor he does not have', () => {
+    expect(everything).not.toMatch(/minor in Business Analytics/i)
+  })
+
+  it('does not undercount the software portfolio', () => {
+    // It was "four applications". It is eight products and twelve builds.
+    expect(everything).not.toMatch(/[Ff]our (?:working )?(?:shipped )?(?:software )?(?:applications|products)/)
+  })
+
+  it('names the real employers rather than a placeholder', () => {
+    const all = PACKS.map((p) => JSON.stringify(resumeFor(p, DEFAULT_DATES))).join('\n')
+    expect(all).not.toMatch(/fill this in|«/)
+    expect(all).toMatch(/MG Fitness/)
+    expect(all).toMatch(/Walgreens/)
+  })
+
+  it('keeps the dates that are actually on the resume', () => {
+    expect(DEFAULT_DATES.verizon).toBe('May 2023 – Sept 2025')
+    expect(DEFAULT_DATES.snhu).toBe('Oct 2021 – Apr 2023')
+    expect(DEFAULT_DATES.guard).toBe('Oct 2025 – present')
+  })
+
+  it('does not stretch eighteen months into two years', () => {
+    // Oct 2021 to Apr 2023 is eighteen months. It read as "two years".
+    expect(everything).not.toMatch(/[Tt]wo years .{0,40}(?:student|university|SNHU)/)
+  })
+
+  it('leads with the right role for the pack rather than always the newest', () => {
+    // Reverse chronological puts basic training at the top of a higher-education
+    // application, which is not the first thing that should be read.
+    expect(resumeFor(PACKS.find((p) => p.id === 'education')!, DEFAULT_DATES).roles[0].org).toMatch(/Southern New Hampshire/)
+    expect(resumeFor(PACKS.find((p) => p.id === 'operations')!, DEFAULT_DATES).roles[0].org).toMatch(/Walgreens/)
+    expect(resumeFor(PACKS.find((p) => p.id === 'public')!, DEFAULT_DATES).roles[0].org).toMatch(/National Guard/)
+  })
+})

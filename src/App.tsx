@@ -815,7 +815,7 @@ function SettingsView({ settings, onChange, onResetLanes }: { settings: Settings
         <p className="mb-1 mt-3 text-[11px] uppercase tracking-wide faint">Dates on the resume</p>
         <div className="grid grid-cols-2 gap-3">
           {([
-            ['verizon', 'Verizon'], ['snhu', 'SNHU student involvement'], ['guard', 'National Guard'], ['firstJob', 'Earlier job'],
+            ['guard', 'National Guard'], ['verizon', 'Verizon'], ['snhu', 'SNHU'], ['walgreens', 'Walgreens'], ['mgfitness', 'MG Fitness'],
           ] as const).map(([k, label]) => (
             <Field key={k} label={label}>
               <input value={settings.dates[k]} onChange={(e) => set('dates', { ...settings.dates, [k]: e.target.value })} className={input} />
