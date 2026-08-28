@@ -48,7 +48,7 @@ jobs:
           npx playwright install --with-deps chromium
           nohup npm run preview > /tmp/preview.log 2>&1 &
           echo $! > /tmp/preview.pid
-          npx wait-on http://127.0.0.1:4174 -t 60000
+          npx wait-on http://127.0.0.1:4174 -t 60000 || { echo '--- preview log ---'; cat /tmp/preview.log; exit 1; }
           npm run e2e
           kill "$(cat /tmp/preview.pid)" 2>/dev/null || true
 
