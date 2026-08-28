@@ -7,26 +7,25 @@ that decides what you're allowed to see.
 
 ---
 
-## 0. The privacy split — read this first
+## 0. What lives where
 
-The app is served from GitHub Pages, which on a free account means **this repo is
-public.** So the line is hard and it is not a preference:
+This repo is public, by the owner's decision. `PROFILE.md` holds the personal
+half — constraints, fit reasoning, resume strategy — and `SPEC.md` holds the
+machine.
 
-| Lives in this repo (public) | Lives only on the phone |
-|---|---|
-| The scanner and the app | The profile |
-| Scanned job listings (public data already) | The resume and its variants |
-| Filter *mechanics* — how a rule works | ZIP, pay floor, commute limit |
-| The starter company list | Saved nets, selections, scores |
-| | Generated cover letters |
+One carve-out stands as an offer rather than a rule: the **pay floor** is the
+number on the other side of every negotiation that follows, and it can be moved
+to a device-only setting without changing anything else. Everything else is here
+on purpose.
 
-Scoring and letter-writing run **in the browser** with the owner's own API key,
-so nothing personal ever reaches the scheduled job at all.
+What still never gets committed, because it is generated rather than decided:
 
-Nothing about employment history, health, motivation, or what any given role
-would cost the person doing it goes in this repo in any form. The axes below
-describe *what the machine measures*. They deliberately do not record why those
-measurements were chosen.
+- Cover letters and tailored resume variants
+- The applied log, once it contains real outcomes
+- Any API key
+
+Scoring and letter-writing run **in the browser** with the owner's own key, so
+none of that has to reach the scheduled scan.
 
 ---
 
@@ -264,7 +263,59 @@ count come free.
 
 ---
 
-## 8. Sources
+## 8. Duplicates
+
+The same req arrives four different ways — the company's own board, an
+aggregator, a LinkedIn alert, a friend's link — and four rows for one job makes
+every count a lie.
+
+**Merged into one row**, keyed on normalised company + title + location, with
+fuzzy title matching for the small variations boards introduce.
+
+- **The canonical link is the company's own board**, always, when one exists.
+  It is the direct apply path, it is freshest, and it skips the aggregator
+  redirect chain that loses applications.
+- The row carries a `seen on 4 boards` badge, expandable to every source and
+  every link.
+- **A separate Duplicates view** lists every merged group, so what got collapsed
+  is auditable and a wrong merge can be split back apart. Merging silently is
+  the same sin as filtering silently.
+
+**Cross-posting count is a signal, not just noise.** A job pushed to five boards
+is usually hard to fill, agency-driven, or high-churn. A job sitting only on the
+company's own board is often fresher and far less competed against. Both are
+worth knowing, so the count is shown rather than thrown away.
+
+---
+
+## 9. The applied log
+
+A tick box on every job: **Applied.** That is the whole interaction. Everything
+else is derived from it.
+
+Each entry records the date, which link was used, which resume variant went out,
+and which cover letter. Statuses move `applied → replied → interviewing →
+offer / rejected`, and anything sitting untouched past a set age is marked
+**`ghosted`** rather than left ambiguous — that is what happened, and a log that
+won't say so is less useful than one that will.
+
+What it buys, beyond a list:
+
+- **Applied jobs leave the pool** — suppressed, never deleted. The same posting
+  never comes back around as new, whichever board it reappears on.
+- **It closes the loop with duplicate detection.** A job applied to 45 days ago
+  that resurfaces as a fresh posting is a confirmed dead req. Not a guess — a
+  dated record. That single fact explains a great many silences.
+- **It is the only thing here that gets smarter over time.** After fifty entries
+  it can say which lanes actually produce replies and which produce nothing,
+  which is the feedback loop that blind volume never provides. Applications sent
+  into the dark teach nothing no matter how many there are.
+- It is exportable, because the record of what was applied to and when is worth
+  more than the tool that produced it.
+
+---
+
+## 10. Sources
 
 | Source | How | Coverage |
 |---|---|---|
@@ -288,7 +339,7 @@ is a setting that never leaves the device, so a move is one field, not a rebuild
 
 ---
 
-## 9. The starter scan list
+## 11. The starter scan list
 
 Seeded, then owned and edited. Weighted toward commutable, service-compatible,
 and coordination-shaped rather than a generic top-200.
@@ -312,7 +363,7 @@ badly served by searching only one half of it.
 
 ---
 
-## 10. Pay
+## 12. Pay
 
 The floor is a **setting on the device, never a number in this repo.** A public
 repo stating a walk-away figure hands it to the other side of every negotiation
@@ -339,11 +390,11 @@ Pay is a **gate, not an axis.** Clearing the floor twice over does not make a
 job better — the axes in §4 decide the ranking. What money buys here is the
 right to be on the list at all.
 
-## 11. How it runs
+## 13. How it runs
 
 - Static site on GitHub Pages, phone-first
-- A scheduled GitHub Action scans overnight and commits results, so the page is
-  simply *there* in the morning
+- A scheduled GitHub Action scans **nightly** and commits results, so the page
+  is simply *there* in the morning
 - Rules, nets, profile and selections in `localStorage`, exportable as a backup
 - Scoring and letters call Claude from the browser with the owner's key
 - Every part inspectable in this repo. No service, no account, no ranking that
@@ -351,10 +402,10 @@ right to be on the list at all.
 
 ---
 
-## 12. Not yet decided
+## 14. Not yet decided
 
 - Whether the paste box parses alert emails on-device or needs a small parser
   service (on-device preferred; some HTML is hostile)
-- Refresh cadence for the scan — nightly vs twice daily
-- Whether saved nets sync across devices at all, given nothing personal is
-  allowed in the repo
+- Whether stale and reposted listings are hidden or shown down-ranked
+- Whether `no pay listed` is down-ranked rather than merely tagged
+- How long an application sits before the log calls it ghosted
