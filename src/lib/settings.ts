@@ -1,4 +1,5 @@
 import { read, write } from './storage'
+import { DEFAULT_DATES, type Contact, type Dates } from './documents'
 import type { Profile } from './requirements'
 import { DEFAULT_WEIGHTS, type Weights } from './score'
 
@@ -14,6 +15,14 @@ export type Settings = {
   profile: Profile
   weights: Weights
   apiKey: string
+  /**
+   * On the device, never in the repository. The documents are public content —
+   * where he worked and what he did — but an address and a phone number in a
+   * public repo is a different kind of exposure, and dates guessed wrong are
+   * worse on a resume than dates left blank.
+   */
+  contact: Contact
+  dates: Dates
 }
 
 export const DEFAULTS: Settings = {
@@ -22,6 +31,8 @@ export const DEFAULTS: Settings = {
   profile: { years: 5, degree: 'bachelor', clearance: 'none' },
   weights: DEFAULT_WEIGHTS,
   apiKey: '',
+  contact: { name: '', city: 'Wakefield, MA', email: '', phone: '', links: '' },
+  dates: DEFAULT_DATES,
 }
 
 /**

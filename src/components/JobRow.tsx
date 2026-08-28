@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import type { Job } from '../types'
 import { commuteOf } from '../lib/commute'
+import { packFor } from '../lib/packs'
 import { boardCount } from '../lib/dedupe'
 import { formatPay } from '../lib/pay'
 import { gapsFor, type Profile } from '../lib/requirements'
-import { defaultCtx, LOGISTICS, rank, variantFor, type Ctx, type Weights } from '../lib/score'
+import { defaultCtx, LOGISTICS, rank, type Ctx, type Weights } from '../lib/score'
 import { Bar, Chip } from './ui'
 
 const VERDICT_TONE = { matched: 'good', 'soft-gap': 'warn', 'hard-gap': 'bad', unstated: 'plain' } as const
@@ -27,7 +28,7 @@ function snippet(job: Job, query: string): string | null {
 }
 
 export function JobRow({
-  job, profile, weights, ctx = defaultCtx(), applied, selected, expanded, deadReq, onToggleExpand, onToggleSelect, onApply, description, query = '', showCompany = true,
+  job, profile, weights, ctx = defaultCtx(), applied, selected, expanded, deadReq, onToggleExpand, onToggleSelect, onApply, onDoc, description, query = '', showCompany = true,
 }: {
   job: Job
   profile: Profile
@@ -40,12 +41,15 @@ export function JobRow({
   onToggleExpand: () => void
   onToggleSelect: () => void
   onApply: (next: boolean) => void
+  /** Open the resume or letter written for this job's pack. */
+  onDoc?: (kind: 'resume' | 'letter') => void
   description?: string
   query?: string
   /** Off when the list is grouped by employer — the group header already says it. */
   showCompany?: boolean
 }) {
   const [showAll, setShowAll] = useState(false)
+  const [showDocs, setShowDocs] = useState(false)
   const { axes, gettable: ease, industry, logistics, fit, score } = rank(job, profile, weights, ctx)
   const commute = commuteOf(job)
   const gaps = gapsFor(job.requirements, profile)
@@ -167,7 +171,32 @@ export function JobRow({
               <input type="checkbox" checked={applied} onChange={(e) => onApply(e.target.checked)} className="h-4 w-4" />
               I applied
             </label>
-            <span className="text-[11px] faint">resume: {variantFor(job, ctx.now)}</span>
+            {/*
+              The point of the whole thing: the posting is open in one tab and
+              the right resume is one press away in the other. Pre-made per
+              pack, so there is nothing to wait for and no key to buy.
+            */}
+            {onDoc && (
+              <span className="relative">
+                <button
+                  type="button"
+                  onClick={() => setShowDocs(!showDocs)}
+                  aria-expanded={showDocs}
+                  aria-label="My documents for this kind of job"
+                  className="chip"
+                  style={showDocs ? { color: 'var(--accent)', borderColor: 'var(--accent)' } : undefined}
+                >
+                  ⋯ my documents
+                </button>
+                {showDocs && (
+                  <span className="ml-2 inline-flex items-center gap-3 text-xs">
+                    <span className="faint text-[11px]">{packFor(job, ctx.now).name}:</span>
+                    <button type="button" onClick={() => onDoc('resume')} style={{ color: 'var(--accent)' }}>resume ↗</button>
+                    <button type="button" onClick={() => onDoc('letter')} style={{ color: 'var(--accent)' }}>cover letter ↗</button>
+                  </span>
+                )}
+              </span>
+            )}
             {job.alsoOn.length > 0 && (
               <details className="text-[11px] faint">
                 <summary className="cursor-pointer">also on {job.alsoOn.length} other board{job.alsoOn.length > 1 ? 's' : ''}</summary>

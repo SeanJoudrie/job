@@ -8,6 +8,9 @@ import { defaultLanes, describeRule, LANES_VERSION, mkRule, runNet, topBaseline,
 import { AXIS_LABELS, FIT, LOGISTICS, LOGISTICS_SHARE, rank, variantFor, type AxisId, type Ctx } from './lib/score'
 import { PER_EMPLOYER, topJobs, type TopEntry } from './lib/top'
 import { commuteOf } from './lib/commute'
+import { letterFor } from './lib/documents'
+import { PACKS, packFor, type Pack } from './lib/packs'
+import { LetterSheet, ResumeSheet } from './components/Sheet'
 import { industryFor } from './lib/industry'
 import { gapsFor } from './lib/requirements'
 import { easeScore } from './lib/ease'
@@ -16,7 +19,9 @@ import { read, write } from './lib/storage'
 import type { Job } from './types'
 import { coverLetter, scoreJob, type Verdict } from './lib/claude'
 
-type View = 'top' | 'pool' | 'applied' | 'dupes' | 'settings'
+type View = 'top' | 'pool' | 'applied' | 'dupes' | 'docs' | 'settings'
+/** Which document is open over the list, if any. */
+type OpenDoc = { pack: Pack; kind: 'resume' | 'letter' }
 type Sort = 'fit' | 'commute' | 'pay' | 'newest' | 'title' | 'gettable'
 const PAGE = 60
 
@@ -45,6 +50,7 @@ export default function App() {
   const [verdicts, setVerdicts] = useState<Record<string, Verdict>>(() => read('job.verdicts.v1', {}))
   const [letters, setLetters] = useState<Record<string, string>>(() => read('job.letters.v1', {}))
   const [busy, setBusy] = useState<string | null>(null)
+  const [doc, setDoc] = useState<OpenDoc | null>(null)
 
   useEffect(() => {
     loadIndex().then(setIndex).catch((e: Error) => setError(e.message))
@@ -227,6 +233,7 @@ export default function App() {
         onToggleExpand={() => setExpanded(toggle(expanded, job.id))}
         onToggleSelect={() => setSelected(toggle(selected, job.id))}
         onApply={(next) => apply(job, next)}
+        onDoc={(kind: 'resume' | 'letter') => setDoc({ pack: packFor(job, ctx.now), kind })}
       />
       {(verdicts[job.id] || letters[job.id]) && (
         <VerdictBlock verdict={verdicts[job.id]} letter={letters[job.id]} variant={variantFor(job, ctx.now)} />
@@ -247,7 +254,7 @@ export default function App() {
           <h1 className="text-sm font-semibold">Jobs</h1>
           <span className="text-[11px] faint">{index.count} scanned · {new Date(index.generatedAt).toLocaleDateString()}</span>
           <nav className="ml-auto flex gap-2 text-xs">
-            {(['top', 'pool', 'applied', 'dupes', 'settings'] as View[]).map((v) => (
+            {(['top', 'pool', 'applied', 'dupes', 'docs', 'settings'] as View[]).map((v) => (
               <button key={v} onClick={() => setView(v)} aria-current={view === v} style={{ color: view === v ? 'var(--accent)' : 'var(--muted)' }}>
                 {v === 'dupes' ? `dupes ${dupes.length}` : v === 'applied' ? `applied ${appliedList.length}` : v}
               </button>
@@ -398,6 +405,7 @@ export default function App() {
           appliedLog={applied}
           verdicts={verdicts}
           letters={letters}
+          onDoc={(pack, kind) => setDoc({ pack, kind })}
         />
       )}
 
@@ -411,6 +419,39 @@ export default function App() {
         />
       )}
       {view === 'dupes' && <DupesView jobs={dupes} />}
+      {view === 'docs' && <DocsView onOpen={(pack: Pack, kind: 'resume' | 'letter') => setDoc({ pack, kind })} />}
+
+      {doc && (
+        <div className="fixed inset-0 z-20 overflow-y-auto" style={{ background: 'var(--bg)' }}>
+          <div className="no-print sticky top-0 flex flex-wrap items-center gap-3 border-b line px-3 py-2 text-xs" style={{ background: 'var(--bg)' }}>
+            <button onClick={() => setDoc(null)} style={{ color: 'var(--accent)' }}>← back</button>
+            <span className="font-semibold">{doc.pack.name}</span>
+            <span className="faint">{doc.kind === 'resume' ? `${doc.pack.variant} resume` : 'cover letter'}</span>
+            <div className="ml-auto flex gap-3">
+              {(['resume', 'letter'] as const).map((k) => (
+                <button key={k} onClick={() => setDoc({ ...doc, kind: k })} style={{ color: doc.kind === k ? 'var(--accent)' : 'var(--muted)' }}>{k}</button>
+              ))}
+              {doc.kind === 'letter' && (
+                <button onClick={() => navigator.clipboard?.writeText(letterFor(doc.pack))} className="faint">copy text</button>
+              )}
+              {/* The browser's own PDF writer. Better typography than anything
+                  worth bundling, and it saves wherever he tells it to. */}
+              <button onClick={() => window.print()} className="chip" style={{ color: 'var(--accent)', borderColor: 'var(--accent)' }}>
+                print / save as PDF
+              </button>
+            </div>
+          </div>
+          {settings.contact.name === '' && (
+            <p className="no-print px-3 py-2 text-[11px]" style={{ color: 'var(--warn)' }}>
+              Your name and contact details are blank — fill them in under Settings and they appear on every document.
+            </p>
+          )}
+          {doc.kind === 'resume'
+            ? <ResumeSheet pack={doc.pack} contact={settings.contact} dates={settings.dates} />
+            : <LetterSheet pack={doc.pack} contact={settings.contact} />}
+        </div>
+      )}
+
       {view === 'settings' && (
         <SettingsView
           settings={settings}
@@ -563,7 +604,7 @@ function VerdictBlock({ verdict, letter, variant }: { verdict?: Verdict; letter?
 }
 
 function TopView({
-  entries, profile, weights, ctx, applied, descs, expanded, selected, onToggleExpand, onToggleSelect, onApply, appliedLog, verdicts, letters,
+  entries, profile, weights, ctx, applied, descs, expanded, selected, onToggleExpand, onToggleSelect, onApply, appliedLog, verdicts, letters, onDoc,
 }: {
   entries: TopEntry[]
   profile: import('./lib/requirements').Profile
@@ -579,6 +620,7 @@ function TopView({
   appliedLog: AppliedLog
   verdicts: Record<string, Verdict>
   letters: Record<string, string>
+  onDoc: (pack: Pack, kind: 'resume' | 'letter') => void
 }) {
   if (!entries.length) return <p className="p-4 text-sm muted">Nothing yet — the pool is empty or everything is filtered out.</p>
   return (
@@ -604,6 +646,7 @@ function TopView({
               onToggleExpand={() => onToggleExpand(e.job.id)}
               onToggleSelect={() => onToggleSelect(e.job.id)}
               onApply={(next) => onApply(e.job, next)}
+              onDoc={(kind: 'resume' | 'letter') => onDoc(packFor(e.job, ctx.now), kind)}
             />
             {(verdicts[e.job.id] || letters[e.job.id]) && (
               <VerdictBlock verdict={verdicts[e.job.id]} letter={letters[e.job.id]} variant={variantFor(e.job, ctx.now)} />
@@ -613,6 +656,38 @@ function TopView({
                 same role posted {e.variants.length + 1} times with different shifts
               </p>
             )}
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+/**
+ * The eight packs, and the documents written for each.
+ *
+ * Reachable on its own as well as from a job row, because the point is that
+ * they are already made: opening this tab and finding eight finished resumes
+ * is the difference between applying on a Tuesday evening and not.
+ */
+function DocsView({ onOpen }: { onOpen: (pack: Pack, kind: 'resume' | 'letter') => void }) {
+  return (
+    <div>
+      <p className="px-3 py-2 text-[11px] faint">
+        Eight kinds of job, eight resumes, eight letters, written in advance. Every posting in the pool maps to exactly
+        one of these, and the ⋯ button on a job opens the pair written for it. Print or save as PDF from inside a
+        document; your contact details come from Settings and are never stored anywhere but this device.
+      </p>
+      <ul>
+        {PACKS.map((pack) => (
+          <li key={pack.id} className="border-b line px-3 py-2.5">
+            <p className="text-sm font-medium">{pack.name}</p>
+            <p className="mt-0.5 text-xs muted">{pack.blurb}</p>
+            <p className="mt-1.5 flex flex-wrap items-center gap-3 text-xs">
+              <button onClick={() => onOpen(pack, 'resume')} style={{ color: 'var(--accent)' }}>resume ↗</button>
+              <button onClick={() => onOpen(pack, 'letter')} style={{ color: 'var(--accent)' }}>cover letter ↗</button>
+              <Chip tone={pack.variant === 'stripped' ? 'warn' : 'plain'}>{pack.variant}</Chip>
+            </p>
           </li>
         ))}
       </ul>
@@ -724,6 +799,31 @@ function SettingsView({ settings, onChange, onResetLanes }: { settings: Settings
           </select>
         </Field>
       </div>
+      <div>
+        <p className="mb-1 text-[11px] uppercase tracking-wide faint">
+          Your details — they appear on every resume and letter, and never leave this device
+        </p>
+        <div className="grid grid-cols-2 gap-3">
+          {([
+            ['name', 'Full name'], ['city', 'City, state'], ['phone', 'Phone'], ['email', 'Email'], ['links', 'Portfolio or LinkedIn'],
+          ] as const).map(([k, label]) => (
+            <Field key={k} label={label}>
+              <input value={settings.contact[k]} onChange={(e) => set('contact', { ...settings.contact, [k]: e.target.value })} className={input} />
+            </Field>
+          ))}
+        </div>
+        <p className="mb-1 mt-3 text-[11px] uppercase tracking-wide faint">Dates on the resume</p>
+        <div className="grid grid-cols-2 gap-3">
+          {([
+            ['verizon', 'Verizon'], ['snhu', 'SNHU student involvement'], ['guard', 'National Guard'], ['firstJob', 'Earlier job'],
+          ] as const).map(([k, label]) => (
+            <Field key={k} label={label}>
+              <input value={settings.dates[k]} onChange={(e) => set('dates', { ...settings.dates, [k]: e.target.value })} className={input} />
+            </Field>
+          ))}
+        </div>
+      </div>
+
       <div className="space-y-3">
         <p className="text-[11px] faint">
           Logistics carry {Math.round(LOGISTICS_SHARE * 100)}% of the fit and the job itself {Math.round((1 - LOGISTICS_SHARE) * 100)}%.

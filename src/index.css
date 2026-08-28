@@ -46,3 +46,43 @@
   font-size: 11px; white-space: nowrap;
 }
 .tabular { font-variant-numeric: tabular-nums; }
+
+/*
+ * The document sheet: resume and cover letter, laid out for paper.
+ *
+ * There is no PDF library here on purpose. The browser already has one — the
+ * print dialog's "Save as PDF" — and it produces better typography than a
+ * bundled renderer, weighs nothing, and works the same on his laptop as on his
+ * phone. All this has to do is get out of its own way when the dialog opens.
+ */
+.sheet {
+  background: #fff;
+  color: #111;
+  font: 11pt/1.42 ui-serif, Georgia, "Times New Roman", serif;
+  max-width: 7.5in;
+  margin: 0 auto;
+  padding: 0.5in 0.55in;
+}
+.sheet h1 { font-size: 19pt; margin: 0 0 2px; letter-spacing: -0.01em; }
+.sheet h2 {
+  font-size: 9.5pt; text-transform: uppercase; letter-spacing: 0.09em;
+  margin: 16px 0 5px; padding-bottom: 3px; border-bottom: 1px solid #ccc; color: #444;
+}
+.sheet h3 { font-size: 11pt; margin: 10px 0 1px; }
+.sheet p { margin: 0 0 9px; }
+.sheet ul { margin: 3px 0 0; padding-left: 16px; }
+.sheet li { margin-bottom: 3px; }
+.sheet .contact { font-size: 9.5pt; color: #444; margin-bottom: 2px; }
+.sheet .where { font-size: 9.5pt; color: #555; font-style: italic; }
+.sheet .blank { background: #fff3bf; padding: 0 2px; }
+
+@media print {
+  /* Everything but the sheet steps aside. Visibility rather than display, so
+     the sheet keeps its place in the flow and paginates properly. */
+  body * { visibility: hidden; }
+  .sheet, .sheet * { visibility: visible; }
+  .sheet { position: absolute; left: 0; top: 0; width: 100%; max-width: none; padding: 0; }
+  .no-print { display: none !important; }
+  .sheet .blank { background: none; }
+  @page { margin: 0.6in; }
+}

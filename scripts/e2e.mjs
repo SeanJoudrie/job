@@ -341,6 +341,48 @@ await page.waitForTimeout(400)
 const dupText = await page.locator('main').innerText()
 check('the duplicates view explains itself', /Every merge is listed/.test(dupText) || /No duplicates/.test(dupText))
 
+// --- the pre-made documents ------------------------------------------------
+// The whole point: the posting open in one tab, the right resume one press
+// away in the other. Nothing generated, nothing to wait for, no key to buy.
+await page.getByRole('button', { name: 'docs' }).click()
+await page.waitForTimeout(400)
+const docsText = await page.locator('main').innerText()
+check('eight packs, each with a resume and a letter already written',
+  (await page.getByRole('button', { name: 'resume ↗' }).count()) === 8, `${await page.getByRole('button', { name: 'resume ↗' }).count()} packs`)
+check('and one of them is the stripped variant for hourly employers', /stripped/.test(docsText))
+
+await page.getByRole('button', { name: 'resume ↗' }).first().click()
+await page.waitForTimeout(400)
+const sheet = await page.locator('.sheet').innerText()
+// Section headings are upper-cased in CSS, so innerText comes back shouting.
+check('opening one renders a real document', /experience/i.test(sheet) && /Verizon/i.test(sheet), sheet.split('\n').slice(0, 3).join(' / '))
+check('and it carries the 4.5x line, which is the strongest thing on it', /4\.5x/.test(sheet))
+check('a blank contact block says so rather than printing an empty header',
+  /set (?:it|these) in Settings/.test(sheet) || /Wakefield/.test(sheet))
+
+// The letter for the same pack, and only the marked blanks in it.
+await page.getByRole('button', { name: 'letter', exact: true }).click()
+await page.waitForTimeout(300)
+const letter = await page.locator('.sheet').innerText()
+check('the letter for that pack is written and addressed', /Dear Hiring Committee/.test(letter) && letter.length > 700, `${letter.length} chars`)
+await page.getByRole('button', { name: '← back' }).click()
+await page.waitForTimeout(300)
+
+// And the same pair reachable from a job, which is how it gets used.
+await page.getByRole('button', { name: 'top' }).click()
+await page.waitForTimeout(600)
+await page.locator('li:has(> div > input) button[aria-expanded]').first().click()
+await page.waitForTimeout(400)
+await page.getByRole('button', { name: 'My documents for this kind of job' }).first().click()
+await page.waitForTimeout(300)
+check('a job row opens the documents written for its kind of job',
+  (await page.getByRole('button', { name: 'cover letter ↗' }).count()) > 0)
+await page.getByRole('button', { name: 'resume ↗' }).first().click()
+await page.waitForTimeout(400)
+check('and that really is a document, not an empty panel', /experience/i.test(await page.locator('.sheet').innerText()))
+await page.getByRole('button', { name: '← back' }).click()
+await page.waitForTimeout(300)
+
 // --- settings --------------------------------------------------------------
 await page.getByRole('button', { name: 'settings' }).click()
 await page.waitForTimeout(300)
@@ -349,6 +391,7 @@ check('settings names the running build', /Build \d{4}-\d{2}-\d{2}/.test(setText
 check('the pay floor is editable and on-device', /pay floor/i.test(setText))
 // The label is upper-cased in CSS, so innerText comes back shouting.
 check('the commute is set in minutes', /Commute \(minutes\)/i.test(setText))
+check('contact details are set here and stay on the device', /Full name/i.test(setText) && /never leave this device/i.test(setText))
 check('and the weights are grouped, so the 60/40 is visible', /Logistics carry 60%/.test(setText),
   (setText.match(/Logistics carry[^\n]*/) ?? [''])[0])
 check('the weights are sliders, not fixed', (await page.locator('input[type="range"]').count()) >= 5)
