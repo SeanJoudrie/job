@@ -1,6 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk'
 import type { Job } from '../types'
-import { gapsFor, type Profile } from './requirements'
+import { gapsFor, type Gap, type Profile } from './requirements'
 
 /**
  * The deeper pass, run deliberately on a handful of chosen jobs rather than on
@@ -101,7 +101,27 @@ ${PROFILE_BRIEF}`,
   return block.input as Verdict
 }
 
-export async function coverLetter(job: Job, variant: 'full' | 'stripped', apiKey: string): Promise<string> {
+/**
+ * What the app already knows about this job, handed to the letter.
+ *
+ * It used to send the raw posting and nothing else, which threw away every
+ * answer the local pass had already worked out. The gaps matter most: a letter
+ * that names the soft requirement and says why it is met — "or equivalent
+ * experience", five years of operations — beats one that hopes nobody notices.
+ */
+export type LetterBrief = {
+  variant: 'full' | 'stripped'
+  gaps: Gap[]
+  industry: string
+}
+
+export async function coverLetter(job: Job, brief: LetterBrief, apiKey: string): Promise<string> {
+  const { variant } = brief
+  const met = brief.gaps.filter((g) => g.verdict === 'matched')
+  const soft = brief.gaps.filter((g) => g.verdict === 'soft-gap')
+  const hard = brief.gaps.filter((g) => g.verdict === 'hard-gap')
+  const list = (gs: Gap[]) => gs.map((g) => `- ${g.requirement.text.slice(0, 150)} (${g.why})`).join('\n')
+
   const res = await client(apiKey).messages.create({
     model: MODEL,
     max_tokens: 1400,
@@ -121,13 +141,25 @@ Rules, in order of importance:
    Where it is raised, frame it proactively: dates known well in advance, USERRA.
 5. ${variant === 'stripped' ? 'Hourly or operations role — the stripped variant. Do NOT mention Order of Omega, the Yale certificates, or the "Senior Account Manager II" title. He is currently being rejected as overqualified by hourly employers, and those three credentials are what read as flight risk. Reframe Verizon as plain work history. Lead instead on reliability, physical capability, military service, clean record and immediate availability. Sound like someone who wants this job, not someone passing through.' : 'Professional or institutional role — the full variant. The whole background applies, credentials included.'}
 6. Under 300 words. Plain sentences. No "I am writing to express my interest".
+7. This is ${brief.industry} work. Sound like someone who wants to work in it,
+   not like someone sending the same letter everywhere.
+8. The requirement gaps below are already worked out. Address the SOFT ones
+   directly and briefly — those are the doors, and reading them as walls is the
+   documented habit this whole tool exists to break. Do not draw attention to a
+   hard gap; do not pretend it is met either.
 
 End with a line beginning "LEFT OUT:" naming anything true and relevant you
 deliberately did not use, so it can be added by hand.`,
     messages: [
       {
         role: 'user',
-        content: `${job.title} at ${job.company}\n\n${(job.descText || job.preview || '').slice(0, 12000)}`,
+        content: [
+          `${job.title} at ${job.company}`,
+          met.length ? `\nRequirements already met:\n${list(met)}` : '',
+          soft.length ? `\nSoft requirements — address these:\n${list(soft)}` : '',
+          hard.length ? `\nHard gaps — do not raise these:\n${list(hard)}` : '',
+          `\nPosting:\n${(job.descText || job.preview || '').slice(0, 12000)}`,
+        ].filter(Boolean).join('\n'),
       },
     ],
   })

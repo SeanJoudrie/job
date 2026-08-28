@@ -8,6 +8,8 @@ import { defaultLanes, describeRule, LANES_VERSION, mkRule, runNet, topBaseline,
 import { AXIS_LABELS, FIT, LOGISTICS, LOGISTICS_SHARE, rank, variantFor, type AxisId, type Ctx } from './lib/score'
 import { PER_EMPLOYER, topJobs, type TopEntry } from './lib/top'
 import { commuteOf } from './lib/commute'
+import { industryFor } from './lib/industry'
+import { gapsFor } from './lib/requirements'
 import { easeScore } from './lib/ease'
 import { loadSettings, saveSettings, type Settings } from './lib/settings'
 import { read, write } from './lib/storage'
@@ -68,6 +70,20 @@ export default function App() {
   const lane = nets.find((n) => n.id === laneId) ?? nets[0]
   const appliedKeys = useMemo(() => new Set(Object.keys(applied)), [applied])
   const jobs = index?.jobs ?? []
+
+  /**
+   * Selected jobs, looked up across the whole index.
+   *
+   * They used to be filtered out of `sorted`, which is the pool list for the
+   * current lane — so a job ticked on the Top tab was not in it and the button
+   * did nothing at all, silently. The selection belongs to the app, not to
+   * whichever list it was made in.
+   */
+  const byId = useMemo(() => new Map(jobs.map((j) => [j.id, j])), [jobs])
+  const chosen = useMemo(
+    () => [...selected].map((id) => byId.get(id)).filter((j): j is Job => !!j),
+    [selected, byId],
+  )
 
   /** Counts per lane, so the top of the app answers "how much is there for me". */
   const laneCounts = useMemo(() => {
@@ -151,7 +167,6 @@ export default function App() {
 
   async function runScoring() {
     if (!settings.apiKey) return setBusy('Add an API key in Settings first.')
-    const chosen = sorted.filter((j) => selected.has(j.id))
     for (const [i, job] of chosen.entries()) {
       setBusy(`Reading ${i + 1} of ${chosen.length}: ${job.title}`)
       try {
@@ -167,11 +182,15 @@ export default function App() {
 
   async function writeLetters() {
     if (!settings.apiKey) return setBusy('Add an API key in Settings first.')
-    const chosen = sorted.filter((j) => selected.has(j.id))
     for (const [i, job] of chosen.entries()) {
       setBusy(`Writing ${i + 1} of ${chosen.length}: ${job.title}`)
       try {
-        const text = await coverLetter(hydrate(job), variantFor(job, ctx.now), settings.apiKey)
+        const full = hydrate(job)
+        const text = await coverLetter(
+          full,
+          { variant: variantFor(job, ctx.now), gaps: gapsFor(full.requirements, settings.profile), industry: industryFor(job, ctx.now).label },
+          settings.apiKey,
+        )
         setLetters((prev) => ({ ...prev, [job.id]: text }))
       } catch (e) {
         setBusy(`Stopped on ${job.title}: ${(e as Error).message}`)
@@ -209,7 +228,9 @@ export default function App() {
         onToggleSelect={() => setSelected(toggle(selected, job.id))}
         onApply={(next) => apply(job, next)}
       />
-      {(verdicts[job.id] || letters[job.id]) && <VerdictBlock verdict={verdicts[job.id]} letter={letters[job.id]} />}
+      {(verdicts[job.id] || letters[job.id]) && (
+        <VerdictBlock verdict={verdicts[job.id]} letter={letters[job.id]} variant={variantFor(job, ctx.now)} />
+      )}
     </div>
   )
 
@@ -286,18 +307,29 @@ export default function App() {
               {grouped && Object.keys(groupOverrides).length > 0 && (
                 <button onClick={() => setGroupOverrides({})} className="faint">reset groups</button>
               )}
-              {selected.size > 0 && (
-                <>
-                  <span className="muted tabular">{selected.size} selected</span>
-                  <button onClick={runScoring} style={{ color: 'var(--accent)' }}>score them →</button>
-                  <button onClick={writeLetters} style={{ color: 'var(--accent)' }}>write letters →</button>
-                  <button onClick={() => setSelected(new Set())} className="faint">clear</button>
-                </>
-              )}
             </div>
-            {busy && <p className="px-3 pb-2 text-[11px]" style={{ color: 'var(--accent)' }}>{busy}</p>}
             {showStack && <FilterStack lane={lane} steps={steps} total={jobs.length} onChange={(next) => setNets(nets.map((n) => (n.id === lane.id ? next : n)))} />}
           </>
+        )}
+
+        {/*
+          Outside the pool block on purpose. The app opens on Top, every row
+          there has a checkbox, and the only buttons that did anything with a
+          selection lived in the pool header — so the whole deeper pass was
+          unreachable from the screen you land on.
+        */}
+        {(chosen.length > 0 || busy) && (
+          <div className="flex flex-wrap items-center gap-3 border-t line px-3 py-2 text-[11px]">
+            {chosen.length > 0 && (
+              <>
+                <span className="muted tabular">{chosen.length} selected</span>
+                <button onClick={runScoring} style={{ color: 'var(--accent)' }}>score them →</button>
+                <button onClick={writeLetters} style={{ color: 'var(--accent)' }}>write letters →</button>
+                <button onClick={() => setSelected(new Set())} className="faint">clear</button>
+              </>
+            )}
+            {busy && <span style={{ color: 'var(--accent)' }}>{busy}</span>}
+          </div>
         )}
       </header>
 
@@ -364,10 +396,20 @@ export default function App() {
           onToggleSelect={(id) => setSelected(toggle(selected, id))}
           onApply={apply}
           appliedLog={applied}
+          verdicts={verdicts}
+          letters={letters}
         />
       )}
 
-      {view === 'applied' && <AppliedView list={appliedList} onStatus={(k, s) => setApplied(withGhosting(setStatus(k, s)))} log={applied} />}
+      {view === 'applied' && (
+        <AppliedView
+          list={appliedList}
+          onStatus={(k, s) => setApplied(withGhosting(setStatus(k, s)))}
+          log={applied}
+          letters={letters}
+          jobsById={byId}
+        />
+      )}
       {view === 'dupes' && <DupesView jobs={dupes} />}
       {view === 'settings' && (
         <SettingsView
@@ -491,7 +533,7 @@ function Empty({ lane, steps }: { lane: Net; steps: { rule: Rule; before: number
   )
 }
 
-function VerdictBlock({ verdict, letter }: { verdict?: Verdict; letter?: string }) {
+function VerdictBlock({ verdict, letter, variant }: { verdict?: Verdict; letter?: string; variant?: 'full' | 'stripped' }) {
   return (
     <div className="panel border-b line px-3 py-2 pl-9 text-xs">
       {verdict && (
@@ -509,7 +551,9 @@ function VerdictBlock({ verdict, letter }: { verdict?: Verdict; letter?: string 
       )}
       {letter && (
         <details className="mt-2">
-          <summary className="cursor-pointer" style={{ color: 'var(--accent)' }}>cover letter</summary>
+          <summary className="cursor-pointer" style={{ color: 'var(--accent)' }}>
+            cover letter{variant ? ` — send it with the ${variant} resume` : ''}
+          </summary>
           <textarea defaultValue={letter} rows={14} className={`${input} mt-1 font-mono text-[11px]`} />
           <button onClick={() => navigator.clipboard?.writeText(letter)} className="mt-1 chip">copy</button>
         </details>
@@ -519,7 +563,7 @@ function VerdictBlock({ verdict, letter }: { verdict?: Verdict; letter?: string 
 }
 
 function TopView({
-  entries, profile, weights, ctx, applied, descs, expanded, selected, onToggleExpand, onToggleSelect, onApply, appliedLog,
+  entries, profile, weights, ctx, applied, descs, expanded, selected, onToggleExpand, onToggleSelect, onApply, appliedLog, verdicts, letters,
 }: {
   entries: TopEntry[]
   profile: import('./lib/requirements').Profile
@@ -533,6 +577,8 @@ function TopView({
   onToggleSelect: (id: string) => void
   onApply: (job: Job, next: boolean) => void
   appliedLog: AppliedLog
+  verdicts: Record<string, Verdict>
+  letters: Record<string, string>
 }) {
   if (!entries.length) return <p className="p-4 text-sm muted">Nothing yet — the pool is empty or everything is filtered out.</p>
   return (
@@ -559,6 +605,9 @@ function TopView({
               onToggleSelect={() => onToggleSelect(e.job.id)}
               onApply={(next) => onApply(e.job, next)}
             />
+            {(verdicts[e.job.id] || letters[e.job.id]) && (
+              <VerdictBlock verdict={verdicts[e.job.id]} letter={letters[e.job.id]} variant={variantFor(e.job, ctx.now)} />
+            )}
             {e.variants.length > 0 && (
               <p className="border-b line px-3 pb-2 pl-9 text-[11px] faint">
                 same role posted {e.variants.length + 1} times with different shifts
@@ -571,7 +620,13 @@ function TopView({
   )
 }
 
-function AppliedView({ list, onStatus, log }: { list: import('./types').Applied[]; onStatus: (k: string, s: import('./types').Applied['status']) => void; log: AppliedLog }) {
+function AppliedView({ list, onStatus, log, letters, jobsById }: {
+  list: import('./types').Applied[]
+  onStatus: (k: string, s: import('./types').Applied['status']) => void
+  log: AppliedLog
+  letters: Record<string, string>
+  jobsById: Map<string, Job>
+}) {
   if (!list.length) return <p className="p-4 text-sm muted">Nothing logged yet. Tick “I applied” on a job and it lands here.</p>
   const counts = list.reduce<Record<string, number>>((a, e) => ({ ...a, [e.status]: (a[e.status] ?? 0) + 1 }), {})
   return (
@@ -591,6 +646,28 @@ function AppliedView({ list, onStatus, log }: { list: import('./types').Applied[
         >
           export
         </button>
+        {/* Written on a phone, needed on a laptop. Copying them one at a time
+            through a <details> is not a way to move fourteen letters. */}
+        {Object.keys(letters).length > 0 && (
+          <button
+            onClick={() => {
+              const text = Object.entries(letters)
+                .map(([id, body]) => {
+                  const j = jobsById.get(id)
+                  return `${'='.repeat(60)}\n${j ? `${j.title} — ${j.company}\n${j.url}` : id}\n${'='.repeat(60)}\n\n${body}`
+                })
+                .join('\n\n\n')
+              const a = document.createElement('a')
+              a.href = URL.createObjectURL(new Blob([text], { type: 'text/plain' }))
+              a.download = 'cover-letters.txt'
+              a.click()
+            }}
+            className="chip"
+            style={{ color: 'var(--accent)', borderColor: 'var(--accent)' }}
+          >
+            export {Object.keys(letters).length} letters
+          </button>
+        )}
       </div>
       <ul>
         {list.map((e) => (

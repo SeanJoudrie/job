@@ -67,6 +67,26 @@ const belowFloor = await page.evaluate(() =>
     .filter((t) => { const m = t.match(/\$([\d.]+)[–-]\$([\d.]+)\/hr/); return m && Number(m[2]) < 25 }).length)
 check('nothing below the pay floor is recommended', belowFloor === 0, `${belowFloor} under $25/hr`)
 
+// --- the deeper pass has to be reachable from the screen the app opens on ---
+// It was not. Every row on Top carries a checkbox, and the only buttons that
+// did anything with a selection lived in the pool header — and even there the
+// handler filtered the selection out of the pool's own list, so a job ticked on
+// Top would not have been found by it either.
+await page.locator('li:has(> div > input) input[type="checkbox"]').first().check()
+await page.waitForTimeout(300)
+const topBar = await page.locator('header').innerText()
+check('a job ticked on Top offers something to do with it', /1 selected/.test(topBar) && /write letters/.test(topBar),
+  (topBar.match(/\d+ selected[^\n]*/) ?? ['nothing'])[0])
+
+// Pressing it with no key must say so. That proves the handler is wired to the
+// selection rather than quietly finding nothing — the failure it used to have.
+await page.getByRole('button', { name: 'write letters →' }).click()
+await page.waitForTimeout(400)
+check('and pressing it reaches the letter writer', /Add an API key/.test(await page.locator('header').innerText()),
+  (await page.locator('header').innerText()).split('\n').find((l) => /API key/.test(l)) ?? 'no response')
+await page.getByRole('button', { name: 'clear' }).click()
+await page.waitForTimeout(300)
+
 await page.getByRole('button', { name: 'pool' }).click()
 await page.waitForTimeout(600)
 
