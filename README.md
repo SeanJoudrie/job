@@ -40,6 +40,22 @@ npm run build
 npm run preview & npm run e2e    # 26 browser checks
 ```
 
+## Federal jobs (optional)
+
+USAJOBS needs a free key, and it is the one channel where Guard service and
+veteran preference are scored rather than decorative.
+
+1. Request a key at <https://developer.usajobs.gov/apirequest/> — name, email,
+   and a one-line description. It arrives by email, usually within a minute.
+2. Add two repository secrets at
+   **Settings → Secrets and variables → Actions → New repository secret**:
+   - `USAJOBS_KEY` — the key from the email
+   - `USAJOBS_EMAIL` — the address you registered with. The API requires it as
+     the User-Agent and rejects anything else.
+
+Secrets are never exposed by a public repo. Until both are set the scan skips
+USAJOBS and says so; nothing else changes.
+
 ## What lives where
 
 Only `data/history.json` is committed — first-seen dates and repost counts,

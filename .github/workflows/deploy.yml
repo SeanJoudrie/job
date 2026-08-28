@@ -34,6 +34,11 @@ jobs:
       # Exits non-zero rather than publishing an empty board, so a bad night
       # leaves yesterday's deploy live instead of replacing it with nothing.
       - name: Scan the boards
+        env:
+          # Optional. Set both as repository secrets to include federal jobs;
+          # the scan skips USAJOBS and says so when they are absent.
+          USAJOBS_KEY: ${{ secrets.USAJOBS_KEY }}
+          USAJOBS_EMAIL: ${{ secrets.USAJOBS_EMAIL }}
         run: npm run scan
 
       - run: npm run build

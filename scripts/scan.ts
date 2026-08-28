@@ -6,7 +6,7 @@ import { parsePay } from '../src/lib/pay'
 import { parseRequirements } from '../src/lib/requirements'
 import { classifyFamilies } from '../src/lib/roles'
 import type { Job } from '../src/types'
-import { fetchBoard, type Raw } from './sources'
+import { fetchBoard, fetchUsaJobs, type Raw } from './sources'
 
 /**
  * The nightly scan.
@@ -139,6 +139,19 @@ async function main() {
     } catch (err) {
       console.log(`  ${board.name.padEnd(20)}     ! ${(err as Error).message}`)
     }
+  }
+
+  // Federal, where veteran preference is scored rather than decorative.
+  try {
+    const federal = await fetchUsaJobs('Boston, Massachusetts', MAX_MILES)
+    if (federal.length) {
+      raws.push(...federal)
+      console.log(`  ${'USAJOBS'.padEnd(20)} ${String(federal.length).padStart(5)} postings`)
+    } else {
+      console.log(`  ${'USAJOBS'.padEnd(20)}     - skipped (set USAJOBS_KEY and USAJOBS_EMAIL)`)
+    }
+  } catch (err) {
+    console.log(`  ${'USAJOBS'.padEnd(20)}     ! ${(err as Error).message}`)
   }
 
   const enriched = raws.map(enrich).filter((j): j is Job => j !== null)

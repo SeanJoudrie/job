@@ -283,4 +283,79 @@ async function fetchSmartRecruiters(board: Extract<Board, { ats: 'smartrecruiter
   return out
 }
 
+/**
+ * USAJOBS. Federal work, and the one channel where Guard service and veteran
+ * preference are a scored advantage rather than a line a recruiter skims past.
+ *
+ * Needs a free key from developer.usajobs.gov, supplied as USAJOBS_KEY with the
+ * registered address as USAJOBS_EMAIL — the API requires that address as the
+ * User-Agent and rejects anything else. Without both the scan skips it and says
+ * so rather than failing.
+ */
+const RATE: Record<string, 'hour' | 'day' | 'week' | 'month' | 'year'> = {
+  PH: 'hour', PD: 'day', PW: 'week', PM: 'month', PA: 'year', PB: 'year',
+}
+
+export type UsaJobsItem = {
+  MatchedObjectId?: string
+  MatchedObjectDescriptor?: {
+    PositionTitle?: string; PositionURI?: string; ApplyURI?: string[]
+    OrganizationName?: string; DepartmentName?: string
+    PositionLocation?: { LocationName?: string }[]
+    QualificationSummary?: string
+    PublicationStartDate?: string
+    PositionRemuneration?: { MinimumRange?: string; MaximumRange?: string; RateIntervalCode?: string }[]
+    UserArea?: { Details?: { JobSummary?: string; MajorDuties?: string[]; Requirements?: string } }
+  }
+}
+
+/** Pure, so the shape can be checked without a key or a network call. */
+export function mapUsaJobs(items: UsaJobsItem[]): Raw[] {
+  const out: Raw[] = []
+  for (const item of items) {
+    const d = item.MatchedObjectDescriptor
+    if (!d?.PositionTitle) continue
+    const details = d.UserArea?.Details
+    const pay = d.PositionRemuneration?.[0]
+    const period = RATE[pay?.RateIntervalCode ?? ''] ?? 'year'
+    out.push({
+      id: `usajobs:${item.MatchedObjectId}`,
+      source: 'usajobs' as Source,
+      company: d.OrganizationName ?? d.DepartmentName ?? 'Federal government',
+      sector: 'gov',
+      title: d.PositionTitle,
+      url: d.ApplyURI?.[0] ?? d.PositionURI ?? '',
+      descText: htmlToText(
+        [details?.JobSummary ?? '', (details?.MajorDuties ?? []).join('\n'), d.QualificationSummary ?? '', details?.Requirements ?? ''].join('\n\n'),
+      ),
+      locationRaw: (d.PositionLocation ?? []).map((l) => l.LocationName ?? '').filter(Boolean).join('; '),
+      payHint: pay?.MinimumRange ? `$${pay.MinimumRange} - $${pay.MaximumRange ?? pay.MinimumRange} per ${period}` : '',
+      postedAt: iso(d.PublicationStartDate),
+    })
+  }
+  return out
+}
+
+export async function fetchUsaJobs(locationName: string, radiusMiles: number): Promise<Raw[]> {
+  const key = process.env.USAJOBS_KEY
+  const email = process.env.USAJOBS_EMAIL
+  if (!key || !email) return []
+
+  const out: Raw[] = []
+  for (let page = 1; page <= 10; page++) {
+    const url = `https://data.usajobs.gov/api/search?LocationName=${encodeURIComponent(locationName)}&Radius=${radiusMiles}&ResultsPerPage=500&Page=${page}`
+    const res = await fetch(url, {
+      headers: { Host: 'data.usajobs.gov', 'User-Agent': email, 'Authorization-Key': key },
+      signal: AbortSignal.timeout(45000),
+    })
+    if (!res.ok) throw new Error(`usajobs ${res.status}`)
+    const data = (await res.json()) as { SearchResult?: { SearchResultCountAll?: number; SearchResultItems?: UsaJobsItem[] } }
+    const items = data.SearchResult?.SearchResultItems ?? []
+    if (items.length === 0) break
+    out.push(...mapUsaJobs(items))
+    if (out.length >= (data.SearchResult?.SearchResultCountAll ?? 0)) break
+  }
+  return out
+}
+
 export type { Raw }
