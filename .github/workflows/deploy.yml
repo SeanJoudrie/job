@@ -20,6 +20,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -37,12 +38,19 @@ jobs:
 
       - run: npm run build
 
+      # The preview server's output must not stay attached to this step: a
+      # background child holding the step's stdout keeps the step alive after
+      # the checks finish, and the job hangs until the six-hour timeout. It did
+      # exactly that on the first run.
       - name: Check it in a browser
+        timeout-minutes: 10
         run: |
           npx playwright install --with-deps chromium
-          npm run preview &
+          nohup npm run preview > /tmp/preview.log 2>&1 &
+          echo $! > /tmp/preview.pid
           npx wait-on http://127.0.0.1:4174 -t 60000
           npm run e2e
+          kill "$(cat /tmp/preview.pid)" 2>/dev/null || true
 
       # Only the first-seen history is kept. It is the one thing that cannot be
       # refetched, and it is what makes repost detection possible.
