@@ -65,11 +65,15 @@ describe('the individual signals', () => {
     const many = job({ requirements: Array.from({ length: 8 }, () => ({ text: 'x', kind: 'other' as const, hardness: 'hard' as const })) })
     expect(easeOf(many).score).toBeLessThan(easeOf(job()).score)
   })
-  it('stays inside 0 and 10 whatever is thrown at it', () => {
+  it('stays inside 0 and 10 whatever is thrown at it, without piling up at the ends', () => {
     const worst = job({ sector: 'defense', title: 'Senior Principal Architect', pay: { min: 300000, max: 400000, period: 'year', raw: '' },
       descText: 'take-home, panel interview, hiring committee',
       requirements: Array.from({ length: 12 }, () => ({ text: 'x', kind: 'other' as const, hardness: 'hard' as const })) })
-    expect(easeOf(worst).score).toBe(0)
+    // Clamping used to pin a quarter of the real pool to exactly 0, which made
+    // a senior cleared defence role indistinguishable from an ordinary
+    // competitive one. The curve keeps the ordering without the pile-up.
+    expect(easeOf(worst).score).toBeGreaterThan(0)
+    expect(easeOf(worst).score).toBeLessThan(1)
   })
 })
 

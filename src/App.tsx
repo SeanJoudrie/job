@@ -4,15 +4,16 @@ import { Chip, Field, input } from './components/ui'
 import { isDeadReq, keyOf, loadApplied, markApplied, setStatus, unmarkApplied, withGhosting, exportApplied, type AppliedLog } from './lib/applied'
 import { loadDescriptions, loadIndex, type Index } from './lib/data'
 import { boardCount } from './lib/dedupe'
-import { defaultLanes, describeRule, LANES_VERSION, mkRule, runNet, type Net, type Rule } from './lib/nets'
-import { axesFor, AXIS_LABELS, scoreOf, variantFor, type AxisId } from './lib/score'
+import { defaultLanes, describeRule, LANES_VERSION, mkRule, runNet, topBaseline, type Net, type Rule } from './lib/nets'
+import { AXIS_LABELS, rank, variantFor, type AxisId } from './lib/score'
+import { PER_EMPLOYER, topJobs, type TopEntry } from './lib/top'
 import { easeScore } from './lib/ease'
 import { loadSettings, saveSettings, type Settings } from './lib/settings'
 import { read, write } from './lib/storage'
 import type { Job } from './types'
 import { coverLetter, scoreJob, type Verdict } from './lib/claude'
 
-type View = 'pool' | 'applied' | 'dupes' | 'settings'
+type View = 'top' | 'pool' | 'applied' | 'dupes' | 'settings'
 type Sort = 'fit' | 'commute' | 'pay' | 'newest' | 'title' | 'gettable'
 const PAGE = 60
 
@@ -23,7 +24,7 @@ export default function App() {
   const [nets, setNets] = useState<Net[]>(() => loadNets(loadSettings().floorHourly))
   const [laneId, setLaneId] = useState<string>(() => read<string>('job.lane.v1', 'easy'))
   const [applied, setApplied] = useState<AppliedLog>(() => withGhosting(loadApplied()))
-  const [view, setView] = useState<View>('pool')
+  const [view, setView] = useState<View>(() => read<View>('job.view.v1', 'top'))
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState<Sort>('fit')
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
@@ -45,6 +46,7 @@ export default function App() {
   useEffect(() => void write('job.nets.v1', { version: LANES_VERSION, nets }), [nets])
   useEffect(() => void write('job.lane.v1', laneId), [laneId])
   useEffect(() => void write('job.grouped.v1', grouped), [grouped])
+  useEffect(() => void write('job.view.v1', view), [view])
   useEffect(() => void write('job.verdicts.v1', verdicts), [verdicts])
   useEffect(() => void write('job.letters.v1', letters), [letters])
 
@@ -71,7 +73,7 @@ export default function App() {
   }, [filtered, query])
 
   const sorted = useMemo(() => {
-    const withScore = searched.map((j) => ({ j, s: scoreOf(axesFor(j, settings.profile), settings.weights) }))
+    const withScore = searched.map((j) => ({ j, s: rank(j, settings.profile, settings.weights).score }))
     const cmp: Record<Sort, (a: (typeof withScore)[0], b: (typeof withScore)[0]) => number> = {
       fit: (a, b) => b.s - a.s,
       commute: (a, b) => (a.j.miles ?? 9e9) - (b.j.miles ?? 9e9),
@@ -103,7 +105,7 @@ export default function App() {
     return [...byCompany.entries()].map(([company, jobs]) => ({
       company,
       jobs,
-      best: Math.max(...jobs.map((j) => scoreOf(axesFor(j, settings.profile), settings.weights))),
+      best: Math.max(...jobs.map((j) => rank(j, settings.profile, settings.weights).score)),
     }))
   }, [sorted, grouped, settings])
 
@@ -164,6 +166,16 @@ export default function App() {
     setBusy(null)
   }
 
+  /**
+   * The best of everything, across every lane. Held to the same baseline every
+   * lane uses — radius, pay floor, no sales, nothing already applied to — then
+   * ranked without regard to which lane a job belongs to.
+   */
+  const best = (() => {
+    const pool = runNet(jobs, topBaseline(settings.floorHourly), appliedKeys, keyOf).jobs
+    return topJobs(pool, settings.profile, settings.weights, { limit: 80 })
+  })()
+
   const renderRow = (job: Job) => (
     <div key={job.id}>
       <JobRow
@@ -198,7 +210,7 @@ export default function App() {
           <h1 className="text-sm font-semibold">Jobs</h1>
           <span className="text-[11px] faint">{index.count} scanned · {new Date(index.generatedAt).toLocaleDateString()}</span>
           <nav className="ml-auto flex gap-2 text-xs">
-            {(['pool', 'applied', 'dupes', 'settings'] as View[]).map((v) => (
+            {(['top', 'pool', 'applied', 'dupes', 'settings'] as View[]).map((v) => (
               <button key={v} onClick={() => setView(v)} aria-current={view === v} style={{ color: view === v ? 'var(--accent)' : 'var(--muted)' }}>
                 {v === 'dupes' ? `dupes ${dupes.length}` : v === 'applied' ? `applied ${appliedList.length}` : v}
               </button>
@@ -311,6 +323,22 @@ export default function App() {
             )
           )}
         </>
+      )}
+
+      {view === 'top' && (
+        <TopView
+          entries={best}
+          profile={settings.profile}
+          weights={settings.weights}
+          applied={appliedKeys}
+          descs={descs}
+          expanded={expanded}
+          selected={selected}
+          onToggleExpand={(id) => setExpanded(toggle(expanded, id))}
+          onToggleSelect={(id) => setSelected(toggle(selected, id))}
+          onApply={apply}
+          appliedLog={applied}
+        />
       )}
 
       {view === 'applied' && <AppliedView list={appliedList} onStatus={(k, s) => setApplied(withGhosting(setStatus(k, s)))} log={applied} />}
@@ -433,6 +461,57 @@ function VerdictBlock({ verdict, letter }: { verdict?: Verdict; letter?: string 
           <button onClick={() => navigator.clipboard?.writeText(letter)} className="mt-1 chip">copy</button>
         </details>
       )}
+    </div>
+  )
+}
+
+function TopView({
+  entries, profile, weights, applied, descs, expanded, selected, onToggleExpand, onToggleSelect, onApply, appliedLog,
+}: {
+  entries: TopEntry[]
+  profile: import('./lib/requirements').Profile
+  weights: import('./lib/score').Weights
+  applied: Set<string>
+  descs: Record<string, string>
+  expanded: Set<string>
+  selected: Set<string>
+  onToggleExpand: (id: string) => void
+  onToggleSelect: (id: string) => void
+  onApply: (job: Job, next: boolean) => void
+  appliedLog: AppliedLog
+}) {
+  if (!entries.length) return <p className="p-4 text-sm muted">Nothing yet — the pool is empty or everything is filtered out.</p>
+  return (
+    <div>
+      <p className="px-3 py-2 text-[11px] faint">
+        Best across every lane, ranked on fit and how winnable each one is. One entry per role — a job posted
+        once per shift appears once — and no employer takes more than {PER_EMPLOYER} places, so the list shows
+        the range of what is out there rather than one company&rsquo;s hiring plan.
+      </p>
+      <ul>
+        {entries.map((e) => (
+          <li key={e.job.id}>
+            <JobRow
+              job={descs[e.job.id] ? { ...e.job, descText: descs[e.job.id] } : e.job}
+              profile={profile}
+              weights={weights}
+              applied={applied.has(keyOf(e.job))}
+              selected={selected.has(e.job.id)}
+              expanded={expanded.has(e.job.id)}
+              deadReq={isDeadReq(e.job, appliedLog)}
+              description={descs[e.job.id]}
+              onToggleExpand={() => onToggleExpand(e.job.id)}
+              onToggleSelect={() => onToggleSelect(e.job.id)}
+              onApply={(next) => onApply(e.job, next)}
+            />
+            {e.variants.length > 0 && (
+              <p className="border-b line px-3 pb-2 pl-9 text-[11px] faint">
+                same role posted {e.variants.length + 1} times with different shifts
+              </p>
+            )}
+          </li>
+        ))}
+      </ul>
     </div>
   )
 }

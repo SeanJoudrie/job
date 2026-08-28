@@ -25,6 +25,38 @@ page.on('pageerror', (e) => errors.push(e.message))
 await page.goto(BASE, { waitUntil: 'networkidle' })
 await page.waitForSelector('nav', { timeout: 20000 })
 
+// --- the Top tab -----------------------------------------------------------
+await page.waitForTimeout(1200)
+const topText = await page.locator('main').innerText()
+check('the app opens on Top', /Best across every lane/.test(topText))
+
+const topRows = await page.evaluate(() =>
+  [...document.querySelectorAll('li:has(> div > input) button[aria-expanded]')].slice(0, 20).map((b) => {
+    const t = (b.textContent ?? '').trim()
+    return { score: Number(t.match(/^([\d.]+)/)?.[1]), line: t.replace(/\s+/g, ' ').slice(0, 80) }
+  }).filter((r) => Number.isFinite(r.score)))
+check('Top lists scored jobs', topRows.length > 5, `${topRows.length} rows`)
+check('and they descend by score', topRows.every((r, i) => i === 0 || topRows[i - 1].score >= r.score),
+  topRows.slice(0, 6).map((r) => r.score).join(' '))
+
+// One employer posting a role once per shift must not own the list.
+const employers = await page.evaluate(() =>
+  [...document.querySelectorAll('li:has(> div > input)')].slice(0, 15)
+    .map((li) => li.textContent?.match(/\n\s*([^·\n]+?)\s*·/)?.[1]?.trim() ?? ''))
+const counts = employers.reduce((m, e) => (e ? { ...m, [e]: (m[e] ?? 0) + 1 } : m), {})
+const worst = Math.max(0, ...Object.values(counts))
+check('no employer takes more than three places', worst <= 3, JSON.stringify(counts).slice(0, 110))
+
+// Top is a recommendation, so it obeys the pay floor the lanes do.
+const belowFloor = await page.evaluate(() =>
+  [...document.querySelectorAll('li:has(> div > input)')].slice(0, 20)
+    .map((li) => li.textContent ?? '')
+    .filter((t) => { const m = t.match(/\$([\d.]+)[–-]\$([\d.]+)\/hr/); return m && Number(m[2]) < 26 }).length)
+check('nothing below the pay floor is recommended', belowFloor === 0, `${belowFloor} under $26/hr`)
+
+await page.getByRole('button', { name: 'pool' }).click()
+await page.waitForTimeout(600)
+
 // --- the pool loads at all -------------------------------------------------
 // A job row, specifically: an <li> whose own child div holds the checkbox.
 // `li:has(input)` also matches the employer group wrapping them, which made

@@ -3,8 +3,7 @@ import type { Job } from '../types'
 import { boardCount } from '../lib/dedupe'
 import { formatPay } from '../lib/pay'
 import { gapsFor, type Profile } from '../lib/requirements'
-import { easeOf } from '../lib/ease'
-import { axesFor, scoreOf, variantFor, type Weights } from '../lib/score'
+import { rank, variantFor, type Weights } from '../lib/score'
 import { Bar, Chip } from './ui'
 
 const VERDICT_TONE = { matched: 'good', 'soft-gap': 'warn', 'hard-gap': 'bad', unstated: 'plain' } as const
@@ -45,13 +44,11 @@ export function JobRow({
   showCompany?: boolean
 }) {
   const [showAll, setShowAll] = useState(false)
-  const axes = axesFor(job, profile)
-  const score = scoreOf(axes, weights)
+  const { axes, gettable: ease, fit, score } = rank(job, profile, weights)
   const gaps = gapsFor(job.requirements, profile)
   const shown = showAll ? gaps : gaps.filter((g) => g.verdict !== 'unstated').slice(0, 8)
   const boards = boardCount(job)
   const match = snippet(job, query)
-  const ease = easeOf(job)
 
   return (
     <li className="border-b line">
@@ -99,6 +96,11 @@ export function JobRow({
               <span className="tabular w-5">{ease.score}</span>
               <span className="faint">{ease.why.join(', ') || 'nothing either way'}</span>
             </span>
+            {score < fit && (
+              <span className="w-full text-[11px] faint">
+                fit reads {fit.toFixed(1)}; scaled to {score.toFixed(1)} by how winnable it is
+              </span>
+            )}
             {axes.map((a) => (
               <span key={a.id} className="flex items-center gap-1.5 text-[11px] muted">
                 <span className="w-24 shrink-0">{a.label}</span>

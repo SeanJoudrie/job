@@ -35,6 +35,15 @@ const TEMP = /\b(?:part[- ]time|seasonal|temporary|per diem|contract|casual)\b/i
 
 export type Ease = { score: number; why: string[] }
 
+/**
+ * Signals accumulate without bound, so clamping the total to 0..10 piled a
+ * quarter of the real pool onto exactly 0 — a senior cleared defence role and
+ * an ordinary competitive one became indistinguishable, and the saturation
+ * made gettability look like the only thing the ranking responded to. A
+ * logistic curve keeps the same ordering with no cliff at either end.
+ */
+const spread = (raw: number) => Math.round((10 / (1 + Math.exp(-(raw - 5) / 3.5))) * 10) / 10
+
 export function easeOf(job: Job): Ease {
   const text = job.descText || job.preview || ''
   const why: string[] = []
@@ -72,7 +81,7 @@ export function easeOf(job: Job): Ease {
   if (hard >= 6) { score -= 2; why.push(`${hard} hard requirements`) }
   else if (hard <= 1) { score += 1; why.push('few hard requirements') }
 
-  return { score: Math.max(0, Math.min(10, score)), why }
+  return { score: spread(score), why }
 }
 
 export const easeScore = (job: Job) => easeOf(job).score

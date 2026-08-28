@@ -214,17 +214,49 @@ credentialed enough for the roles above it. So the app classifies posting tier
 (hourly · entry ops · professional · senior) and, where the tier is below the
 resume, flags it and **switches to the stripped resume variant** (§5).
 
-### Gettability caps the total
+### Top
 
-Averaging is not enough on its own. A perfect fit that cannot be won still
-averaged near the top of the list, and the top of the list is exactly where
-attention goes — so a six-figure cleared defence role was the first thing on
-screen every morning.
+A tab, and where the app opens. The best jobs across every lane, held to the
+same baseline the lanes use — radius, pay floor, no sales, nothing already
+applied to.
 
-The total is therefore capped at **gettability + 3**. A job scoring 0 there
-cannot present above a 3, however well the rest of it reads. Where the cap
-binds, the uncapped fit is reported alongside it, so the number can be explained
-rather than merely trusted.
+Ranking alone does not produce a useful top list. Sorted purely by score the
+real pool returns the same hospital role fifteen times, once per shift. So
+near-identical postings fold into one entry that says how many shifts it was
+posted as, and no employer may take more than three places. The list shows the
+range of what is out there rather than one company's hiring plan.
+
+### Gettability is blended, not a ceiling
+
+Measured over the real pool rather than reasoned about, and the first two
+attempts were both wrong.
+
+A hard ceiling at gettability + 3, with gettability also the heaviest axis,
+double-counted it: fit ended up correlating with the final score at **0.20**,
+so seven of the eight axes were decoration. Worse, clearance-sponsoring jobs —
+the most valuable kind here — averaged **3.50** against 5.35 for everything
+else. The feature was being punished.
+
+Now gettability is counted once, blended at a **25% share**, and the axes carry
+fit. That number is not taste: fit is an average of seven weakly-related axes so
+it clusters (sd 0.92) while gettability spreads (sd 3.37), which means a
+coefficient does not mean what it looks like. Sweeping it against the pool:
+
+| share | r(fit) | r(gettability) |
+|---|---|---|
+| 0.10 | 0.93 | 0.47 |
+| 0.20 | 0.78 | 0.72 |
+| **0.25** | **0.69** | **0.81** |
+| 0.45 | 0.42 | 0.95 |
+
+Gettability stays primary; fit still moves the ranking. A separate floor holds
+the genuinely unwinnable (gettability ≤ 1) below 4 whatever their fit, and the
+raw fit is shown alongside so the number can be explained rather than trusted.
+
+Gettability itself was also clamped to 0..10, which piled **a quarter of the
+pool onto exactly 0** — a senior cleared defence role and an ordinary
+competitive one became indistinguishable. A logistic curve keeps the ordering
+with no pile-up at either end.
 
 ### A low score never blocks anything
 

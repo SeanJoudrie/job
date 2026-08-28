@@ -70,6 +70,13 @@ export type Job = {
   preview?: string
   /** how many places the posting named, before the index kept only the nearest */
   placeCount?: number
+  /**
+   * Gap counts computed at scan time from the FULL requirement list.
+   * The index drops unclassifiable requirement lines to stay small, which left
+   * 38% of jobs looking like they had no requirements at all and defaulted the
+   * reachability axis to a constant. The counts survive the trim.
+   */
+  gaps?: { matched: number; soft: number; hard: number; unstated: number }
 }
 
 export type Applied = {

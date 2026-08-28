@@ -66,6 +66,9 @@ export const FAMILIES: Family[] = [
   // Apprenticeships are deliberately absent — a paid trade apprenticeship is a
   // real route, not noise.
   { id: 'unpaid', label: 'volunteer & unpaid', kind: 'exclude', titles: /\b(?:volunteer|unpaid|intern(?:ship)?|co-?op student|work[- ]study|shadow(?:ing)?)\b/i },
+  // Real boards carry placeholders. Alnylam is currently publishing one called
+  // "Mattie Test Job", and it ranked in the top fifteen.
+  { id: 'placeholder', label: 'test postings', kind: 'exclude', titles: /\b(?:test job|test posting|do not apply|sample (?:job|posting)|dummy|placeholder|ignore this|xxx)\b/i },
 
   { id: 'veterans', label: 'veterans services', kind: 'boost', titles: /\b(?:veteran|\bvso\b|military (?:family|liaison|outreach)|transition assistance|\bva\b medical|servicemember)\b/i },
 ]

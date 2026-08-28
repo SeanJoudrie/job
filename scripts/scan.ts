@@ -3,7 +3,7 @@ import { BOARDS } from '../src/lib/companies'
 import { dedupe } from '../src/lib/dedupe'
 import { HOME, isRemote, nearestMiles, parseLocations } from '../src/lib/location'
 import { parsePay } from '../src/lib/pay'
-import { parseRequirements } from '../src/lib/requirements'
+import { countGaps, gapsFor, parseRequirements } from '../src/lib/requirements'
 import { classifyFamilies } from '../src/lib/roles'
 import type { Job } from '../src/types'
 import { fetchBoard, fetchUsaJobs, type Raw } from './sources'
@@ -49,6 +49,8 @@ export const chunkOf = (id: string) => {
 /** Scanned wider than the 25-mile default so the radius can be widened later. */
 const MAX_MILES = 60
 const TODAY = new Date().toISOString().slice(0, 10)
+/** Matches the app's default; only used to precompute gap counts for the index. */
+const PROFILE = { years: 5, degree: 'bachelor' as const, clearance: 'none' as const }
 
 /** Cheap pre-filter so sources that pay per description do not pay for jobs we drop. */
 const inRange = (locationRaw: string, region?: string): boolean => {
@@ -261,6 +263,8 @@ async function main() {
       locations: nearest ? [nearest] : [],
       placeCount: locations.length,
       requirements: requirements.filter((r) => r.kind !== 'other'),
+      // Counted from the full list, before the trim below throws text away.
+      gaps: countGaps(gapsFor(requirements, PROFILE)),
       preview: descText.slice(0, 280),
     }
   })

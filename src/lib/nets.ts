@@ -137,6 +137,7 @@ const base = (floor: number, miles = 25): Rule[] => [
   mkRule({ type: 'pay', floorHourly: floor, includeUnlisted: true }),
   mkRule({ type: 'family', mode: 'lacks', value: 'sales' }),
   mkRule({ type: 'family', mode: 'lacks', value: 'unpaid' }),
+  mkRule({ type: 'family', mode: 'lacks', value: 'placeholder' }),
   mkRule({ type: 'remote', mode: 'exclude' }),
   mkRule({ type: 'applied', hide: true }),
 ]
@@ -156,6 +157,16 @@ const base = (floor: number, miles = 25): Rule[] => [
  * cost, and still far better than silently never receiving the new lanes.
  */
 export const LANES_VERSION = 2
+
+/**
+ * The rules the Top list ranks within.
+ *
+ * It cannot reuse the Everything lane: that one deliberately carries only a
+ * radius so nothing is hidden from a manual search, and Top was consequently
+ * ranking jobs paying below the floor. Top is a recommendation, so it obeys
+ * the same baseline every lane does.
+ */
+export const topBaseline = (floor: number): Net => ({ id: 'top', name: 'Top', rules: base(floor) })
 
 export function defaultLanes(floor: number): Net[] {
   const fam = (value: string) => mkRule({ type: 'family', mode: 'has', value })

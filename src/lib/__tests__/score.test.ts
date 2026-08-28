@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { Job } from '../../types'
 import type { Profile } from '../requirements'
-import { axesFor, cappedBy, ceilingFor, DEFAULT_WEIGHTS, scoreOf, variantFor } from '../score'
+import { axesFor, DEFAULT_WEIGHTS, GETTABLE_SHARE, IMPOSSIBLE_CEILING, rawFit, scoreOf, variantFor } from '../score'
+import { easeScore } from '../ease'
 
 const SEAN: Profile = { years: 5, degree: 'bachelor', clearance: 'none' }
 let n = 0
@@ -54,12 +55,21 @@ describe('reachable', () => {
 })
 
 describe('service compatibility', () => {
-  it('a clearance-sponsoring job scores at the top', () => {
+  it('a clearance-sponsoring job scores well above an ordinary one', () => {
     const j = job({ requirements: [{ text: 'able to obtain a Secret clearance', kind: 'clearance', hardness: 'soft', clearance: 'obtainable' }] })
-    expect(axis(j, 'service').score).toBeGreaterThanOrEqual(7)
+    expect(axis(j, 'service').score - axis(job(), 'service').score).toBeGreaterThanOrEqual(3)
   })
-  it('an ordinary job is neutral, not penalised', () => {
-    expect(axis(job(), 'service').score).toBe(4)
+  it('federal outranks defence, which outranks an ordinary employer', () => {
+    // Graded rather than three-valued: 85% of the real pool sat on one number.
+    const fed = axis(job({ sector: 'gov' }), 'service').score
+    const def = axis(job({ sector: 'defense' }), 'service').score
+    const plain = axis(job({ sector: 'tech' }), 'service').score
+    expect(fed).toBeGreaterThan(def)
+    expect(def).toBeGreaterThan(plain)
+  })
+  it('a veteran hiring path adds to it', () => {
+    const withPath = axis(job({ sector: 'gov', descText: 'Hiring paths: Open to the public, Veterans.' }), 'service').score
+    expect(withPath).toBeGreaterThan(axis(job({ sector: 'gov' }), 'service').score)
   })
 })
 
@@ -80,7 +90,7 @@ describe('liveness is a down-rank, never a disappearance', () => {
 describe('the total', () => {
   it('is the weighted mean of parts you can see', () => {
     const axes = axesFor(job(), SEAN)
-    expect(axes).toHaveLength(8)
+    expect(axes).toHaveLength(7)
     const s = scoreOf(axes)
     expect(s).toBeGreaterThanOrEqual(0)
     expect(s).toBeLessThanOrEqual(10)
@@ -115,31 +125,57 @@ describe('a job you cannot get is not a good job', () => {
     requirements: [{ text: 'Active TS/SCI', kind: 'clearance', hardness: 'hard', clearance: 'active' }],
     descText: 'Work closely with the team on site. Includes a take-home and a panel interview.',
   })
-
-  it('caps the score at what gettability allows, however well the rest reads', () => {
-    const axes = axesFor(impossible, SEAN)
-    const gettable = axes.find((a) => a.id === 'gettable')!.score
-    expect(gettable).toBeLessThanOrEqual(1)
-    expect(scoreOf(axes)).toBeLessThanOrEqual(ceilingFor(gettable))
-    expect(scoreOf(axes)).toBeLessThanOrEqual(4)
+  const gettable = job({
+    sector: 'university',
+    title: 'Program Coordinator',
+    pay: { min: 28, max: 34, period: 'hour', raw: '' },
+    descText: 'Work closely with the team on site. Hiring immediately, will train.',
   })
 
-  it('and says so, rather than just showing a lower number', () => {
-    // The uncapped fit is reported separately so the cap can be explained.
-    expect(cappedBy(axesFor(impossible, SEAN))).not.toBeNull()
+  it('scores it far below its raw fit', () => {
+    const g = easeScore(impossible)
+    expect(g).toBeLessThanOrEqual(1)
+    expect(scoreOf(axesFor(impossible, SEAN), DEFAULT_WEIGHTS, g)).toBeLessThan(rawFit(axesFor(impossible, SEAN)))
   })
 
-  it('a gettable job with the same fit outranks it', () => {
-    const gettable = job({
-      sector: 'university',
-      title: 'Program Coordinator',
-      pay: { min: 28, max: 34, period: 'hour', raw: '' },
-      descText: 'Work closely with the team on site. Hiring immediately, will train.',
+  it('a gettable job with comparable fit outranks it', () => {
+    const a = scoreOf(axesFor(gettable, SEAN), DEFAULT_WEIGHTS, easeScore(gettable))
+    const b = scoreOf(axesFor(impossible, SEAN), DEFAULT_WEIGHTS, easeScore(impossible))
+    expect(a).toBeGreaterThan(b)
+  })
+
+  it('the raw fit is kept, so the number can be explained rather than trusted', () => {
+    expect(rawFit(axesFor(impossible, SEAN))).toBeGreaterThan(0)
+  })
+
+  it('holds the genuinely impossible below the top, whatever the fit', () => {
+    const axes = axesFor(gettable, SEAN) // a strong fit
+    expect(scoreOf(axes, DEFAULT_WEIGHTS, 0)).toBeLessThanOrEqual(IMPOSSIBLE_CEILING)
+    expect(scoreOf(axes, DEFAULT_WEIGHTS, 8)).toBeGreaterThan(IMPOSSIBLE_CEILING)
+  })
+
+  it('leaves gettability primary without letting it be the only thing', () => {
+    // Measured: fit clusters (sd 0.92) while gettability spreads (sd 3.37), so
+    // an even-looking share silently hands the ranking to one number.
+    expect(GETTABLE_SHARE).toBeGreaterThan(0.15)
+    expect(GETTABLE_SHARE).toBeLessThan(0.35)
+  })
+
+  it('fit still moves the answer at a fixed gettability', () => {
+    const good = scoreOf(axesFor(gettable, SEAN), DEFAULT_WEIGHTS, 6)
+    const poor = scoreOf(axesFor(job({ remote: true, families: ['sales'] }), SEAN), DEFAULT_WEIGHTS, 6)
+    expect(good - poor).toBeGreaterThan(1)
+  })
+
+  it('does not punish a job for the thing that makes it valuable', () => {
+    // Clearance-sponsoring jobs averaged 3.50 against 5.35 when gettability was
+    // both an axis and a ceiling. Service must push a job UP.
+    const sponsors = job({
+      sector: 'gov', title: 'Program Coordinator',
+      requirements: [{ text: 'able to obtain a Secret clearance', kind: 'clearance', hardness: 'soft', clearance: 'obtainable' }],
+      descText: 'Open to veterans. Work closely with the team on site.',
     })
-    expect(scoreOf(axesFor(gettable, SEAN))).toBeGreaterThan(scoreOf(axesFor(impossible, SEAN)))
-  })
-
-  it('gettability is weighted as heavily as anything else', () => {
-    expect(DEFAULT_WEIGHTS.gettable).toBeGreaterThanOrEqual(DEFAULT_WEIGHTS.container)
+    const plain = job({ sector: 'tech', title: 'Program Coordinator', descText: 'Work closely with the team on site.' })
+    expect(rawFit(axesFor(sponsors, SEAN))).toBeGreaterThan(rawFit(axesFor(plain, SEAN)))
   })
 })
