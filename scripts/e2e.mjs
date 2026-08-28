@@ -56,6 +56,23 @@ const laneNames = await laneChips.allInnerTexts()
 check('an old saved lane set is replaced by the shipped one', !laneNames.some((t) => /Stale lane/.test(t)) && laneNames.length > 8,
   `${laneNames.length} lanes after a stale set was planted`)
 
+// Light, always — this is read outdoors, and a phone flipping to dark at dusk
+// changed the app out from under its owner.
+const bg = await page.evaluate(() => getComputedStyle(document.body).backgroundColor)
+const isLight = (() => {
+  const [r, g, b] = (bg.match(/\d+/g) ?? ['0', '0', '0']).map(Number)
+  return (r + g + b) / 3 > 200
+})()
+check('the page is light regardless of the phone theme', isLight, bg)
+
+// A job that cannot be won must not present as a top result, because the top
+// of the list is exactly where attention goes.
+const capped = await page.evaluate(() => {
+  const rows = [...document.querySelectorAll('li:has(> div > input) button[aria-expanded]')]
+  return rows.slice(0, 25).map((b) => Number((b.textContent ?? '').trim().match(/^([\d.]+)/)?.[1])).filter(Number.isFinite)
+})
+check('top-of-list scores exist and are bounded', capped.length > 0 && capped.every((n) => n <= 10), capped.slice(0, 6).join(' '))
+
 // --- the two complaints that drove this round ------------------------------
 // 1. "Easy hire" filled with Anduril, which is a six-figure cleared defence
 //    role with several interview rounds. Nothing about that is an easy hire.

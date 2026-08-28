@@ -27,6 +27,9 @@ negotiation, and it can be moved to a device-only setting at any time.
 |---|---|
 | Interviewing at | **$28–34/hr** |
 | Default floor | **$26/hr** — the number every lane filters on |
+| What the local market pays | Coordination and admin within 25 miles opens around **$26** and tops around **$35**, middle half of tops **$32–41**. Across 360 non-senior, non-engineering roles the median band bottom is **$39**. |
+| Honest ask | **$30–34**, with $32 the number to say without flinching. $28 is entry money for work he has five years of. |
+| Note | 90% of local roles have a top above $28, so the floor is not what is limiting him — which is the constraint gettability now measures. |
 | Absolute floor | **$25/hr**, and only for a job scoring at the very top on fit |
 | Obligations | ~$2,000/month must be covered. This is the survival line, **not the wage target.** |
 

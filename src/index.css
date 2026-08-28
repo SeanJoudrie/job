@@ -18,13 +18,12 @@
     --warn: #9a5b00;
     --bad: #b02a2a;
   }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #14171c; --panel: #1c2027; --line: #2b313a; --ink: #e9edf3;
-      --muted: #a3adbb; --faint: #78828f; --accent: #6aa1ff;
-      --good: #4cc38a; --warn: #e0a33a; --bad: #f07171;
-    }
-  }
+  /*
+   * Light, always. The dark variant is deliberately absent rather than
+   * overridden: this is read outdoors and in daylight, and a phone flipping to
+   * dark at dusk changed the app out from under its owner.
+   */
+  :root { color-scheme: light; }
   html { -webkit-text-size-adjust: 100%; }
   body {
     background: var(--bg);

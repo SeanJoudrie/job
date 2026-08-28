@@ -178,6 +178,7 @@ never a single opaque number: it decomposes into axes you can see and reweight.
 
 | Axis | What it measures | Default weight |
 |---|---|---|
+| **Gettable** | Whether this can realistically be won — employer type, pay band, seniority, held-clearance demands, and how the posting reads | **Highest, and it caps the total** |
 | **Container** | Recurring in-person contact with the same people, on a schedule, with a defined task | **Highest** |
 | **With-people** | Social contact embedded in shared work — not quota-carrying, not policing people | High |
 | **Reachable** | How much of the requirement gap is soft rather than hard | High |
@@ -212,6 +213,18 @@ Rejection happens at both ends — too credentialed for hourly work, not
 credentialed enough for the roles above it. So the app classifies posting tier
 (hourly · entry ops · professional · senior) and, where the tier is below the
 resume, flags it and **switches to the stripped resume variant** (§5).
+
+### Gettability caps the total
+
+Averaging is not enough on its own. A perfect fit that cannot be won still
+averaged near the top of the list, and the top of the list is exactly where
+attention goes — so a six-figure cleared defence role was the first thing on
+screen every morning.
+
+The total is therefore capped at **gettability + 3**. A job scoring 0 there
+cannot present above a 3, however well the rest of it reads. Where the cap
+binds, the uncapped fit is reported alongside it, so the number can be explained
+rather than merely trusted.
 
 ### A low score never blocks anything
 

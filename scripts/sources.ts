@@ -66,6 +66,8 @@ async function getJson(url: string, timeoutMs = 45000): Promise<unknown> {
 type Raw = Omit<Job, 'locations' | 'miles' | 'remote' | 'pay' | 'requirements' | 'families' | 'firstSeen' | 'lastSeen' | 'scans' | 'reposts' | 'alsoOn' | 'linkOk'> & {
   locationRaw: string
   payHint: string
+  /** Used only when locationRaw names a facility rather than a place. */
+  regionHint?: string
 }
 
 const iso = (v: unknown): string | null => {
@@ -79,6 +81,15 @@ const iso = (v: unknown): string | null => {
 
 /** Whether a location string is worth spending a description request on. */
 export type Keep = (locationRaw: string) => boolean
+
+/**
+ * Roles requiring a clinical licence this profile does not hold and cannot get
+ * quickly. A hospital system posts thousands of them, and each one costs a
+ * description request. Skipped at the source rather than filtered later, so the
+ * scan does not spend ten minutes fetching jobs nobody can apply for.
+ */
+const LICENSED = /\b(?:registered nurse|\brn\b|\blpn\b|nurse practitioner|\bnp\b|physician|surgeon|\bmd\b|resident physician|pharmacist|physical therapist|occupational therapist|speech pathologist|radiolog(?:ist|ic technologist)|sonographer|anesthesi|perfusionist|phlebotom|respiratory therapist|nurse anesthetist|midwife|dentist|optometrist|psychiatrist|clinical psychologist|social worker \(licsw\)|\blicsw\b|\bcrna\b|\bpa-c\b)\b/i
+export const isLicensedClinical = (title: string) => LICENSED.test(title)
 
 export async function fetchBoard(board: Board, keep: Keep = () => true): Promise<Raw[]> {
   if (board.ats === 'workday') return fetchWorkday(board, keep)
@@ -99,6 +110,7 @@ export async function fetchBoard(board: Board, keep: Keep = () => true): Promise
       descText: htmlToText(j.content ?? ''),
       locationRaw: j.location?.name ?? '',
       payHint: '',
+      regionHint: board.region,
       postedAt: iso(j.first_published ?? j.updated_at),
     }))
   }
@@ -125,6 +137,7 @@ export async function fetchBoard(board: Board, keep: Keep = () => true): Promise
         descText: [j.descriptionPlain ?? '', lists, j.additionalPlain ?? ''].join('\n').trim(),
         locationRaw: (j.categories?.allLocations ?? []).join('; ') || (j.categories?.location ?? ''),
         payHint: sal?.min ? `$${sal.min} - $${sal.max ?? sal.min} per ${interval || 'year'}` : '',
+        regionHint: board.region,
         postedAt: iso(j.createdAt),
       }
     })
@@ -192,6 +205,7 @@ async function fetchWorkday(board: Extract<Board, { ats: 'workday' }>, keep: Kee
         descText: '',
         locationRaw: j.locationsText ?? '',
         payHint: '',
+        regionHint: board.region,
         postedAt: null,
       })
     }
@@ -201,7 +215,7 @@ async function fetchWorkday(board: Extract<Board, { ats: 'workday' }>, keep: Kee
   // Drop what is out of range BEFORE fetching descriptions. A hospital system
   // posts hundreds of roles and each description is its own request; filtering
   // first turns four hundred and eighty-eight calls into a few dozen.
-  const near = out.filter((r) => keep(r.locationRaw))
+  const near = out.filter((r) => keep(r.locationRaw) && !isLicensedClinical(r.title))
 
   // Workday only returns a description one posting at a time, and the parsers
   // are worth nothing without it. Slow, and that is the accepted trade.
@@ -242,6 +256,7 @@ async function fetchWorkable(board: Extract<Board, { ats: 'workable' }>): Promis
     // city/state sit at the top level here; there is no nested location object.
     locationRaw: j.telecommuting ? 'Remote' : [j.city, j.state].filter(Boolean).join(', '),
     payHint: '',
+    regionHint: board.region,
     postedAt: iso(j.published_on),
   }))
 }
@@ -261,6 +276,7 @@ async function fetchSmartRecruiters(board: Extract<Board, { ats: 'smartrecruiter
     descText: '',
     locationRaw: j.location?.remote ? 'Remote' : [j.location?.city, j.location?.region].filter(Boolean).join(', '),
     payHint: '',
+    regionHint: board.region,
     postedAt: iso(j.releasedDate),
   }))
   let cursor = 0
@@ -342,7 +358,9 @@ export function mapUsaJobs(items: UsaJobsItem[]): Raw[] {
       company: d.OrganizationName ?? d.DepartmentName ?? 'Federal government',
       sector: 'gov',
       title: d.PositionTitle,
-      url: d.ApplyURI?.[0] ?? d.PositionURI ?? '',
+      // USAJOBS returns "https://www.usajobs.gov:443/job/123". Valid, but the
+      // explicit port trips some in-app browsers and looks broken.
+      url: (d.ApplyURI?.[0] ?? d.PositionURI ?? '').replace(/:443(?=\/|$)/, ''),
       descText: htmlToText(
         [
           details?.JobSummary ?? '',
@@ -357,7 +375,7 @@ export function mapUsaJobs(items: UsaJobsItem[]): Raw[] {
       locationRaw: details?.RemoteIndicator
         ? 'Remote'
         : (d.PositionLocation ?? []).map((l) => l.LocationName ?? '').filter(Boolean).join('; '),
-      payHint: pay?.MinimumRange ? `$${pay.MinimumRange} - $${pay.MaximumRange ?? pay.MinimumRange} per ${period}` : '',
+        payHint: pay?.MinimumRange ? `$${pay.MinimumRange} - $${pay.MaximumRange ?? pay.MinimumRange} per ${period}` : '',
       postedAt: iso(d.PublicationStartDate),
     })
   }

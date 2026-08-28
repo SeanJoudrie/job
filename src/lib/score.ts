@@ -1,4 +1,5 @@
 import type { Job } from '../types'
+import { easeOf } from './ease'
 import { countGaps, gapsFor, type Profile } from './requirements'
 
 /**
@@ -13,7 +14,7 @@ import { countGaps, gapsFor, type Profile } from './requirements'
  * on a handful of chosen jobs.
  */
 
-export type AxisId = 'container' | 'people' | 'reachable' | 'overqual' | 'service' | 'domain' | 'liveness'
+export type AxisId = 'gettable' | 'container' | 'people' | 'reachable' | 'overqual' | 'service' | 'domain' | 'liveness'
 
 export type Axis = { id: AxisId; label: string; score: number; why: string }
 export type Weights = Record<AxisId, number>
@@ -24,6 +25,7 @@ export type Weights = Record<AxisId, number>
  * one. These are an argument, not a fact, and every one is a slider.
  */
 export const DEFAULT_WEIGHTS: Weights = {
+  gettable: 3,
   container: 3,
   service: 2.5,
   reachable: 2,
@@ -34,6 +36,7 @@ export const DEFAULT_WEIGHTS: Weights = {
 }
 
 export const AXIS_LABELS: Record<AxisId, string> = {
+  gettable: 'Gettable',
   container: 'Container',
   people: 'With people',
   reachable: 'Reachable',
@@ -121,7 +124,10 @@ export function axesFor(job: Job, profile: Profile): Axis[] {
   if (job.reposts > 0) { liveness = Math.min(liveness, 3); livenessWhy = `reposted ${job.reposts}× — often a dead req` }
   if (job.linkOk === false) { liveness = 0; livenessWhy = 'apply link is dead' }
 
+  const ease = easeOf(job)
+
   return [
+    { id: 'gettable', label: AXIS_LABELS.gettable, score: ease.score, why: ease.why.join(', ') || 'nothing either way' },
     { id: 'container', label: AXIS_LABELS.container, score: clamp(container), why: containerWhy.join(', ') },
     { id: 'people', label: AXIS_LABELS.people, score: clamp(people), why: peopleWhy.join(', ') || 'neutral' },
     { id: 'reachable', label: AXIS_LABELS.reachable, score: reachable, why: reachableWhy },
@@ -132,6 +138,20 @@ export function axesFor(job: Job, profile: Profile): Axis[] {
   ]
 }
 
+/**
+ * A job you cannot get is not a good job.
+ *
+ * Gettability is an axis like any other, but averaging is not enough on its
+ * own: a perfect fit that is impossible to win still averaged out near the top
+ * of the list, and the top of the list is exactly where attention goes. So it
+ * also caps the total. A gettability of 0 cannot present as anything above a 3,
+ * however well the rest of it reads.
+ *
+ * The cap is deliberately visible in `ceilingFor` so the number can always be
+ * explained rather than just trusted.
+ */
+export const ceilingFor = (gettable: number) => gettable + 3
+
 export function scoreOf(axes: Axis[], weights: Weights = DEFAULT_WEIGHTS): number {
   let total = 0
   let denom = 0
@@ -139,7 +159,22 @@ export function scoreOf(axes: Axis[], weights: Weights = DEFAULT_WEIGHTS): numbe
     total += a.score * weights[a.id]
     denom += weights[a.id]
   }
-  return denom === 0 ? 0 : Math.round((total / denom) * 10) / 10
+  const mean = denom === 0 ? 0 : total / denom
+  const gettable = axes.find((a) => a.id === 'gettable')?.score ?? 10
+  return Math.round(Math.min(mean, ceilingFor(gettable)) * 10) / 10
+}
+
+/** True when gettability, not fit, is what is holding the score down. */
+export function cappedBy(axes: Axis[], weights: Weights = DEFAULT_WEIGHTS): number | null {
+  let total = 0
+  let denom = 0
+  for (const a of axes) {
+    total += a.score * weights[a.id]
+    denom += weights[a.id]
+  }
+  const mean = denom === 0 ? 0 : total / denom
+  const gettable = axes.find((a) => a.id === 'gettable')?.score ?? 10
+  return mean > ceilingFor(gettable) ? Math.round(mean * 10) / 10 : null
 }
 
 /** Which resume goes out. Rejection happens at both ends, so this is not cosmetic. */

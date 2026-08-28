@@ -84,3 +84,16 @@ describe('postings that are not jobs', () => {
     expect(classifyFamilies('HVAC Apprentice', '')).not.toContain('unpaid')
   })
 })
+
+describe('roles that need a licence nobody here holds', () => {
+  it('skips them at the source, so a hospital scan does not cost thousands of requests', async () => {
+    const { isLicensedClinical } = await import('../../../scripts/sources')
+    for (const t of ['Registered Nurse - ICU', 'Nurse Practitioner, Cardiology', 'Physical Therapist (Outpatient)', 'Staff Pharmacist'])
+      expect(isLicensedClinical(t)).toBe(true)
+  })
+  it('but keeps the hospital jobs that are actually open to him', async () => {
+    const { isLicensedClinical } = await import('../../../scripts/sources')
+    for (const t of ['Patient Access Representative', 'Program Coordinator', 'Food Service Aide', 'Unit Secretary', 'Medical Records Clerk'])
+      expect(isLicensedClinical(t)).toBe(false)
+  })
+})

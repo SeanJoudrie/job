@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Job } from '../../types'
 import type { Profile } from '../requirements'
-import { axesFor, DEFAULT_WEIGHTS, scoreOf, variantFor } from '../score'
+import { axesFor, cappedBy, ceilingFor, DEFAULT_WEIGHTS, scoreOf, variantFor } from '../score'
 
 const SEAN: Profile = { years: 5, degree: 'bachelor', clearance: 'none' }
 let n = 0
@@ -80,7 +80,7 @@ describe('liveness is a down-rank, never a disappearance', () => {
 describe('the total', () => {
   it('is the weighted mean of parts you can see', () => {
     const axes = axesFor(job(), SEAN)
-    expect(axes).toHaveLength(7)
+    expect(axes).toHaveLength(8)
     const s = scoreOf(axes)
     expect(s).toBeGreaterThanOrEqual(0)
     expect(s).toBeLessThanOrEqual(10)
@@ -102,5 +102,44 @@ describe('which resume goes out', () => {
   it('full for professional postings', () => {
     expect(variantFor(job({ title: 'Senior Program Manager' }))).toBe('full')
     expect(variantFor(job({ title: 'Intelligence Analyst' }))).toBe('full')
+  })
+})
+
+describe('a job you cannot get is not a good job', () => {
+  // Reported: Draper and Anduril sat at 8.5 in a list sorted by fit, which is
+  // exactly where attention goes, while being nearly impossible to win.
+  const impossible = job({
+    sector: 'defense',
+    title: 'Senior Systems Engineer',
+    pay: { min: 150000, max: 200000, period: 'year', raw: '' },
+    requirements: [{ text: 'Active TS/SCI', kind: 'clearance', hardness: 'hard', clearance: 'active' }],
+    descText: 'Work closely with the team on site. Includes a take-home and a panel interview.',
+  })
+
+  it('caps the score at what gettability allows, however well the rest reads', () => {
+    const axes = axesFor(impossible, SEAN)
+    const gettable = axes.find((a) => a.id === 'gettable')!.score
+    expect(gettable).toBeLessThanOrEqual(1)
+    expect(scoreOf(axes)).toBeLessThanOrEqual(ceilingFor(gettable))
+    expect(scoreOf(axes)).toBeLessThanOrEqual(4)
+  })
+
+  it('and says so, rather than just showing a lower number', () => {
+    // The uncapped fit is reported separately so the cap can be explained.
+    expect(cappedBy(axesFor(impossible, SEAN))).not.toBeNull()
+  })
+
+  it('a gettable job with the same fit outranks it', () => {
+    const gettable = job({
+      sector: 'university',
+      title: 'Program Coordinator',
+      pay: { min: 28, max: 34, period: 'hour', raw: '' },
+      descText: 'Work closely with the team on site. Hiring immediately, will train.',
+    })
+    expect(scoreOf(axesFor(gettable, SEAN))).toBeGreaterThan(scoreOf(axesFor(impossible, SEAN)))
+  })
+
+  it('gettability is weighted as heavily as anything else', () => {
+    expect(DEFAULT_WEIGHTS.gettable).toBeGreaterThanOrEqual(DEFAULT_WEIGHTS.container)
   })
 })

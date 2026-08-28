@@ -9,7 +9,13 @@
 export type Sector = 'defense' | 'tech' | 'university' | 'health' | 'nonprofit' | 'gov'
 
 /** Split per ATS rather than lumped, so `Extract<Board, { ats: 'workable' }>` resolves. */
-type Common = { token: string; name: string; sector: Sector }
+/**
+ * `region` is the fallback for employers who name a facility rather than a
+ * place — Beth Israel Lahey posts "Anna Jaques Hospital", which resolves to
+ * nowhere, so 2,000 jobs fell out of the radius. A regional employer's job is
+ * in that region even when the field does not say a city.
+ */
+type Common = { token: string; name: string; sector: Sector; region?: string }
 export type Board =
   | ({ ats: 'greenhouse' } & Common)
   | ({ ats: 'lever' } & Common)
@@ -35,10 +41,14 @@ export const BOARDS: Board[] = [
   { ats: 'workday', token: 'brandeis', wd: 5, site: 'jobs', name: 'Brandeis', sector: 'university' },
   { ats: 'workday', token: 'babson', wd: 1, site: 'Staff', name: 'Babson', sector: 'university' },
   { ats: 'workday', token: 'suffolk', wd: 1, site: 'External', name: 'Suffolk University', sector: 'university' },
+  { ats: 'smartrecruiters', token: 'harvarduniversity', name: 'Harvard University', sector: 'university', region: 'Cambridge, MA' },
 
-  // Health systems — large, steady, and full of coordination and operations work.
-  { ats: 'workday', token: 'tuftsmedicine', wd: 1, site: 'jobs', name: 'Tufts Medicine', sector: 'health' },
+  // Health systems — the largest employers in the region and full of
+  // coordination, scheduling, records and operations work that is not clinical.
+  { ats: 'workday', token: 'bilh', wd: 1, site: 'External', name: 'Beth Israel Lahey Health', sector: 'health', region: 'Boston, MA' },
+  { ats: 'workday', token: 'tuftsmedicine', wd: 1, site: 'jobs', name: 'Tufts Medicine', sector: 'health', region: 'Boston, MA' },
   { ats: 'smartrecruiters', token: 'bostonmedicalcenter', name: 'Boston Medical Center', sector: 'health' },
+  { ats: 'smartrecruiters', token: 'alnylam', name: 'Alnylam', sector: 'health' },
 
   // Conservation and mission work.
   { ats: 'workable', token: 'thetrustees', name: 'The Trustees of Reservations', sector: 'nonprofit' },
@@ -61,4 +71,15 @@ export const BOARDS: Board[] = [
   { ats: 'greenhouse', token: 'cloudflare', name: 'Cloudflare', sector: 'tech' },
   { ats: 'greenhouse', token: 'okta', name: 'Okta', sector: 'tech' },
   { ats: 'greenhouse', token: 'asana', name: 'Asana', sector: 'tech' },
+  { ats: 'greenhouse', token: 'tulip', name: 'Tulip', sector: 'tech' },
+  { ats: 'greenhouse', token: 'starburst', name: 'Starburst', sector: 'tech' },
+  { ats: 'ashby', token: 'benchling', name: 'Benchling', sector: 'tech' },
+  { ats: 'ashby', token: 'wistia', name: 'Wistia', sector: 'tech' },
+  { ats: 'lever', token: 'jumpcloud', name: 'JumpCloud', sector: 'tech' },
+
+  // Retail and consumer — warehouse, fulfilment, stores and support. The
+  // bridging tier, and the one that hires fastest.
+  { ats: 'workday', token: 'newbalance', wd: 1, site: 'Careers', name: 'New Balance', sector: 'tech' },
+  { ats: 'workday', token: 'chewy', wd: 5, site: 'External', name: 'Chewy', sector: 'tech' },
+  { ats: 'workable', token: 'reebok', name: 'Reebok', sector: 'tech' },
 ]

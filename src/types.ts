@@ -36,6 +36,8 @@ export type Loc = {
   lon?: number
   /** distance from home, when it could be resolved */
   miles?: number
+  /** true when the distance came from the employer's region, not the posting */
+  approx?: boolean
 }
 
 export type Job = {
@@ -66,6 +68,8 @@ export type Job = {
   linkOk: boolean | null
   /** first slice of the description, so the index alone can render a row */
   preview?: string
+  /** how many places the posting named, before the index kept only the nearest */
+  placeCount?: number
 }
 
 export type Applied = {

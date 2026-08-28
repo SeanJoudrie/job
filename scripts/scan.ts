@@ -33,7 +33,7 @@ const OUT = `${DIR}/jobs.json`
  * rest is rebuilt at deploy time.
  */
 const HISTORY = 'data/history.json'
-type Seen = { firstSeen: string; lastSeen: string; scans: number; reposts: number }
+type Seen = { firstSeen: string; lastSeen: string; scans: number; reposts: number; linkOk?: boolean | null; linkAt?: string }
 /**
  * Descriptions are ~7 KB each and the whole set is 8.5 MB. The index alone is
  * 346 KB gzipped and loads instantly; descriptions are only needed when a job
@@ -51,12 +51,15 @@ const MAX_MILES = 60
 const TODAY = new Date().toISOString().slice(0, 10)
 
 /** Cheap pre-filter so sources that pay per description do not pay for jobs we drop. */
-const inRange = (locationRaw: string): boolean => {
+const inRange = (locationRaw: string, region?: string): boolean => {
   if (!locationRaw) return true
   const locations = parseLocations(locationRaw, HOME)
   if (locations.some((l) => l.remote)) return true
   const miles = nearestMiles(locations)
-  return miles === null || miles <= MAX_MILES
+  // Unresolvable is kept: it may be a facility name that the region fallback
+  // will place later, and dropping it here would be dropping it forever.
+  if (miles === null) return !region ? true : (nearestMiles(parseLocations(region, HOME)) ?? 1e9) <= MAX_MILES
+  return miles <= MAX_MILES
 }
 
 function previous(): Record<string, Seen> {
@@ -69,9 +72,23 @@ function previous(): Record<string, Seen> {
 }
 
 function enrich(raw: Raw): Job | null {
-  const locations = parseLocations(raw.locationRaw, HOME)
-  const miles = nearestMiles(locations)
+  let locations = parseLocations(raw.locationRaw, HOME)
+  let miles = nearestMiles(locations)
   const remote = isRemote(locations)
+
+  // A facility name resolves to nowhere. For an employer that operates in one
+  // region, that is still a job in that region — the alternative was dropping
+  // two thousand hospital roles because the field said "Anna Jaques Hospital".
+  if (!remote && miles === null && raw.regionHint) {
+    const fallback = parseLocations(raw.regionHint, HOME)
+    const approx = nearestMiles(fallback)
+    if (approx !== null) {
+      locations = locations.length
+        ? locations.map((l, i) => (i === 0 ? { ...l, ...fallback[0], raw: l.raw, approx: true } : l))
+        : fallback.map((l) => ({ ...l, approx: true }))
+      miles = approx
+    }
+  }
 
   // Anything beyond the scan radius and not remote is dropped here rather than
   // shipped to a phone. The pool stays a size a phone can actually hold.
@@ -102,26 +119,51 @@ function enrich(raw: Raw): Job | null {
   }
 }
 
-/** Every apply link is checked. A board full of dead links is worth less than none. */
-async function checkLinks(jobs: Job[], concurrency = 8): Promise<void> {
+/**
+ * Check every apply link, and be careful about what counts as dead.
+ *
+ * The first version marked anything that was not a 2xx as dead, and flagged 146
+ * working jobs — every one of them returned 200 when checked by hand. Boards
+ * rate-limit under a concurrent sweep, and a 429 was being reported to the
+ * owner as "this job is gone". Telling someone a live job is dead is the worst
+ * direction to be wrong in, so now only a 404 or a 410 is dead, everything else
+ * is an honest unknown, and a transient failure gets a second try.
+ */
+const DEAD_STATUS = new Set([404, 410])
+
+async function checkLinks(jobs: Job[], concurrency = 4): Promise<void> {
   let cursor = 0
+
+  const probe = async (url: string): Promise<boolean | null> => {
+    const ctl = new AbortController()
+    const timer = setTimeout(() => ctl.abort(), 20000)
+    try {
+      const res = await fetch(url, { method: 'GET', redirect: 'follow', signal: ctl.signal })
+      if (DEAD_STATUS.has(res.status)) return false
+      if (res.status < 400) return true
+      return null // rate limited, blocked, or broken upstream — not evidence of anything
+    } catch {
+      return null
+    } finally {
+      clearTimeout(timer)
+    }
+  }
+
   const worker = async () => {
     while (cursor < jobs.length) {
       const job = jobs[cursor++]
       if (!job.url) {
-        job.linkOk = false
+        job.linkOk = null
         continue
       }
-      const ctl = new AbortController()
-      const timer = setTimeout(() => ctl.abort(), 15000)
-      try {
-        const res = await fetch(job.url, { method: 'GET', redirect: 'follow', signal: ctl.signal })
-        job.linkOk = res.status < 400
-      } catch {
-        job.linkOk = null // couldn't tell; not the same as known-dead
-      } finally {
-        clearTimeout(timer)
+      let verdict = await probe(job.url)
+      // One retry, because a single refusal under a sweep says more about the
+      // sweep than about the job.
+      if (verdict === null) {
+        await new Promise((r) => setTimeout(r, 1500))
+        verdict = await probe(job.url)
       }
+      job.linkOk = verdict
     }
   }
   await Promise.all(Array.from({ length: concurrency }, worker))
@@ -133,7 +175,7 @@ async function main() {
 
   for (const board of BOARDS) {
     try {
-      const rows = await fetchBoard(board, inRange)
+      const rows = await fetchBoard(board, (loc) => inRange(loc, board.region))
       raws.push(...rows)
       console.log(`  ${board.name.padEnd(20)} ${String(rows.length).padStart(5)} postings`)
     } catch (err) {
@@ -171,10 +213,25 @@ async function main() {
   const merged = dedupe(enriched)
   console.log(`  ${enriched.length} -> ${merged.length} after merging duplicates`)
 
-  console.log('  checking every apply link...')
-  await checkLinks(merged)
+  // Re-checking every link every night is the slowest thing here and almost
+  // all of it is wasted: a link that worked yesterday almost always works
+  // today. New postings are checked, and everything else weekly.
+  const RECHECK_DAYS = 7
+  const stale = merged.filter((job) => {
+    const before = seen[job.id]
+    if (!before || before.linkOk === undefined || !before.linkAt) return true
+    if (before.linkOk !== true) return true
+    return (Date.parse(TODAY) - Date.parse(before.linkAt)) / 86_400_000 >= RECHECK_DAYS
+  })
+  for (const job of merged) {
+    const before = seen[job.id]
+    if (before?.linkOk !== undefined) job.linkOk = before.linkOk
+  }
+  console.log(`  checking ${stale.length} apply links (${merged.length - stale.length} still fresh)...`)
+  await checkLinks(stale)
   const dead = merged.filter((j) => j.linkOk === false).length
-  console.log(`  ${dead} dead links flagged`)
+  const unknown = merged.filter((j) => j.linkOk === null).length
+  console.log(`  ${dead} genuinely dead (404/410), ${unknown} could not be checked`)
 
   // A near-empty scan means the network or a board changed, not that the job
   // market vanished. Failing here keeps the last good deploy live rather than
@@ -187,7 +244,26 @@ async function main() {
 
   mkdirSync(DIR, { recursive: true })
 
-  const index = merged.map(({ descText, ...rest }) => ({ ...rest, preview: descText.slice(0, 280) }))
+  /**
+   * The index carries only what a row needs.
+   *
+   * Full location arrays were 9 MB of a 13.5 MB index — federal postings list
+   * dozens of places each, every one with coordinates. Only the nearest is ever
+   * shown or filtered on. Requirement lines classified `other` were another
+   * 62% of the rest and render as "not something the profile can answer", so
+   * they stay in the descriptions rather than the index.
+   */
+  const index = merged.map(({ descText, locations, requirements, ...rest }) => {
+    const resolved = locations.filter((l) => typeof l.miles === 'number')
+    const nearest = resolved.length ? resolved.reduce((a, b) => (a.miles! <= b.miles! ? a : b)) : locations[0]
+    return {
+      ...rest,
+      locations: nearest ? [nearest] : [],
+      placeCount: locations.length,
+      requirements: requirements.filter((r) => r.kind !== 'other'),
+      preview: descText.slice(0, 280),
+    }
+  })
   writeFileSync(OUT, JSON.stringify({ generatedAt: new Date().toISOString(), count: merged.length, chunks: DESC_CHUNKS, jobs: index }))
 
   const buckets: Record<string, string>[] = Array.from({ length: DESC_CHUNKS }, () => ({}))
@@ -198,7 +274,12 @@ async function main() {
   // a job has to be remembered while it is gone for its return to count.
   const history: Record<string, Seen> = { ...seen }
   for (const job of merged) {
-    history[job.id] = { firstSeen: job.firstSeen, lastSeen: TODAY, scans: job.scans, reposts: job.reposts }
+    const before = seen[job.id]
+    history[job.id] = {
+      firstSeen: job.firstSeen, lastSeen: TODAY, scans: job.scans, reposts: job.reposts,
+      linkOk: job.linkOk,
+      linkAt: stale.includes(job) ? TODAY : (before?.linkAt ?? TODAY),
+    }
   }
   mkdirSync('data', { recursive: true })
   writeFileSync(HISTORY, JSON.stringify(history))
