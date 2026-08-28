@@ -452,7 +452,11 @@ const TIERS: Def[] = [
     id: 'hospitals_health_admin',
     label: 'hospital administration',
     weight: 6.5,
-    sector: ['health'],
+    // Matched on the employer's NAME, not on `sector: ['health']`. The board
+    // list files Ginkgo Bioworks, Alnylam, Benchling, Amwell and Butterfly
+    // Network under health, and a biotech bench-science role was collecting
+    // 6.5 for being hospital administration, which it is not.
+    employer: /\b(?:hospital|health|healthcare|medical cent(?:er|re)|medicine|clinic|infirmary)\b/i,
     title:
       /\b(?:patient (?:access|services|registration|coordinator|navigator)|medical (?:records|secretary|receptionist|billing)|health information|admissions coordinator|unit (?:secretary|coordinator))\b/i,
   },

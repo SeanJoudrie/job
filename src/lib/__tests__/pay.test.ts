@@ -152,3 +152,89 @@ describe('a period word can be in the window and still be the wrong period', () 
     expect(parsePay('$45 per hour')?.period).toBe('hour')
   })
 })
+
+describe('numbers that are not wages', () => {
+  // Every string here is lifted verbatim from a live posting. Each one was
+  // producing a confidently wrong figure, which is worse than producing none:
+  // a wrong number silently filters a job in or out and nobody can see it.
+
+  it('does not read a company’s revenue as an hourly wage', () => {
+    // Vannevar Labs opens every posting with this. "$3M" matched as a bare "$3",
+    // inferred to $3/hr, failed the floor, and removed the entire employer from
+    // every lane with nothing on screen to say so.
+    const p = parsePay('With customer empathy and disciplined growth. In just three years, we grew from $3M to $80M in ARR, achieved early profitability.')
+    expect(p).toBe(null)
+  })
+
+  it('does not read a budget the role manages as the salary', () => {
+    // Harvard, Director of Financial Planning and Analysis. Stored as $400/yr.
+    const p = parsePay("Supervising two analysts, the Director is responsible for the development of the School's $400M+ annual operating budget, multi-year financial plan and monthly forecast.")
+    expect(p).toBe(null)
+  })
+
+  it('reads a thousands suffix on an already-large number as the posting’s typo', () => {
+    // Ginkgo Bioworks published this. Parsed as $185,000,000.
+    const p = parsePay('The base salary range for this role is $185,000k - $278,800k. Actual pay within this range will depend on skills.')
+    expect(p?.min).toBe(185_000)
+    expect(p?.max).toBe(278_800)
+    expect(p?.period).toBe('year')
+  })
+
+  it('still reads a real figure that happens to sit near a large one', () => {
+    const p = parsePay('We raised $80M last year. The salary range for this role is $70,000 - $95,000 per year.')
+    expect(p?.min).toBe(70_000)
+    expect(p?.max).toBe(95_000)
+  })
+})
+
+describe('a currency code in the middle of a range', () => {
+  it('joins the two halves of a Beth Israel band', () => {
+    // 245 of their postings use this format and 103 were read as a single
+    // value, so the floor was comparing against the BOTTOM of the band.
+    const p = parsePay('Pay Range:\n$79,268.80 USD - $204,318.40 USD\nThe pay range listed is the base annual wage range.')
+    expect(p?.min).toBe(79_268.8)
+    expect(p?.max).toBe(204_318.4)
+  })
+
+  it('keeps the top of the band, which is what the floor is compared against', () => {
+    const p = parsePay('$64,480.00 USD - $96,720.00 USD')
+    expect(p?.max).toBe(96_720)
+    expect(meetsFloor(p, 25)).toBe('pass')
+  })
+})
+
+describe('an hourly rate wearing a weekly label', () => {
+  it('is corrected, because nobody is paid $101 a week', () => {
+    // Beth Israel, Nurse Navigator. "per week" fell inside the 45-character
+    // window; $101.14 x 52 is $5,259, which cleared the old $5k absurdity bar.
+    const p = parsePay('Scheduled 40 hours per week. Pay Range: $39.14 - $101.14')
+    expect(p?.period).toBe('hour')
+  })
+
+  it('leaves a real weekly rate alone', () => {
+    // Formlabs pays its interns this, and it is genuinely weekly.
+    const p = parsePay('This internship pays $1,575 - $1,950 per week for the duration of the program.')
+    expect(p?.period).toBe('week')
+    expect(p?.max).toBe(1_950)
+  })
+
+  it('leaves a real day rate alone', () => {
+    expect(parsePay('Day rate: $500 per day')?.period).toBe('day')
+  })
+})
+
+describe('a band that is not a wage', () => {
+  it('reads a placeholder as unstated rather than as failing the floor', () => {
+    // CarGurus published a Finance Operations Coordinator at "$1 - $1 USD".
+    // The parse was correct and the outcome was the worst available: reported
+    // as a dollar an hour, the job failed the floor and left every lane.
+    expect(parsePay('$1 - $1 USD')).toBe(null)
+    expect(meetsFloor(parsePay('$1 - $1 USD'), 25)).toBe('unknown')
+  })
+
+  it('keeps a low but real wage, which is a fail rather than an unknown', () => {
+    const p = parsePay('Pay Range: $17.00 - $22.88 per hour')
+    expect(p?.max).toBe(22.88)
+    expect(meetsFloor(p, 25)).toBe('fail')
+  })
+})

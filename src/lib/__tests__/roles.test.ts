@@ -68,3 +68,49 @@ describe('the other exclusions', () => {
     expect(fam('Night Clerk', 'You will work independently with minimal supervision.')).toContain('solo')
   })
 })
+
+describe('the titles the case file asks to prioritise', () => {
+  // Twenty-six of the forty-five had no family at all, so the exact jobs this
+  // search exists to find were invisible to the lanes built for them.
+  const PRIORITISED: [string, string][] = [
+    ['Executive Assistant', 'coordinator'],
+    ['Office Manager', 'coordinator'],
+    ['Office Assistant', 'coordinator'],
+    ['Records Clerk', 'coordinator'],
+    ['Data Entry Clerk', 'coordinator'],
+    ['Patient Access Representative', 'coordinator'],
+    ['Intake Specialist', 'coordinator'],
+    ['Mailroom Clerk', 'coordinator'],
+    ['Medical Secretary', 'coordinator'],
+    ['Custodian', 'operations'],
+    ['Groundskeeper', 'operations'],
+    ['IT Support Specialist', 'technical'],
+    ['Helpdesk Technician', 'technical'],
+    ['AV Technician', 'technical'],
+    ['Buyer', 'logistics'],
+    ['Materials Associate', 'logistics'],
+    ['People Business Partner', 'hr'],
+    ['Archives Assistant', 'culture'],
+  ]
+  for (const [title, family] of PRIORITISED) {
+    it(`${title} lands in ${family}`, () => {
+      expect(classifyFamilies(title, '')).toContain(family)
+    })
+  }
+
+  it('does not take a bare "assistant" with it', () => {
+    // Assistant Professor, Assistant Coach and Assistant Director are three
+    // different jobs and none of them is coordination.
+    for (const t of ['Assistant Professor of Music', 'Assistant Coach, Track & Field', 'Assistant Director of Development']) {
+      expect(classifyFamilies(t, ''), t).not.toContain('coordinator')
+    }
+  })
+
+  it('matches Archives, which a closing word boundary never could', () => {
+    // /archiv(?:e|ist|al)\b/ cannot match "Archives": the boundary falls
+    // between 'e' and 's' and both are word characters.
+    expect(classifyFamilies('Archives Assistant', '')).toContain('culture')
+    expect(classifyFamilies('Archivist', '')).toContain('culture')
+    expect(classifyFamilies('Digital Archives Specialist', '')).toContain('culture')
+  })
+})

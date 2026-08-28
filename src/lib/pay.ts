@@ -25,7 +25,8 @@ const TRAPS: RegExp[] = [
 ]
 
 /** Money near these words is not the salary. */
-const NOT_PAY = /\b(bonus|equity|stock|rsu|match(?:ing)?|reimburse|stipend|tuition|referral|relocation|budget|revenue|savings|deductible|premium)\b/i
+const NOT_PAY =
+  /\b(bonus|equity|stock|rsu|match(?:ing)?|reimburse|stipend|tuition|referral|relocation|budget|revenue|savings|deductible|premium|arr\b|valuation|funding|raised|in sales|under management|endowment|grant)\b/i
 
 const PERIODS: [RegExp, Period][] = [
   [/(?:per\s+hour|hourly|an?\s+hour|\/\s*(?:hr|hour)s?|\bhrs?\b)/i, 'hour'],
@@ -35,18 +36,57 @@ const PERIODS: [RegExp, Period][] = [
   [/(?:per\s+day|daily|a\s+day|day\s+rate|\/\s*days?)/i, 'day'],
 ]
 
-/** A number that looks like money: $-prefixed, comma-grouped, or k-suffixed. */
-const MONEY = /(\$\s*\d[\d,]*(?:\.\d+)?\s*[kK]?)|(\b\d[\d,]*(?:\.\d+)?\s*[kK]\b)/g
+/**
+ * A number that looks like money: $-prefixed, comma-grouped, or suffixed.
+ *
+ * `M` and `B` are matched deliberately, even though no wage is ever quoted in
+ * millions. Without them "$3M" matched as a bare "$3" — and Vannevar Labs opens
+ * every posting with "we grew from $3M to $80M in ARR", so every one of their
+ * jobs was stored at three dollars an hour, failed the pay floor, and vanished
+ * from every lane with nothing to show it had happened. Matching the suffix
+ * makes the number its real size, and TOO_LARGE below then throws it out.
+ */
+const MONEY = /(\$\s*\d[\d,]*(?:\.\d+)?\s*[kKmMbB]?)|(\b\d[\d,]*(?:\.\d+)?\s*[kK]\b)/g
 
-const SEP = /^\s*(?:-|–|—|to|through|up\s+to)\s*$/i
+/**
+ * The gap between the two halves of a range.
+ *
+ * A currency code may sit in it. Beth Israel writes every band as
+ * "$79,268.80 USD - $204,318.40 USD", and without this the range never joined:
+ * 103 of their postings were stored as a single value, so the floor was being
+ * compared against the BOTTOM of the band — the exact mistake `meetsFloor`
+ * exists to prevent.
+ */
+const SEP = /^\s*(?:USD|CAD|per\s+year|annually)?\s*(?:-|–|—|to|through|up\s+to)\s*$/i
+
+/** No wage is quoted in millions. Anything this large is a company statistic. */
+const TOO_LARGE = 1_000_000
+
+/**
+ * Below this a year, it is not a wage.
+ *
+ * CarGurus published a Finance Operations Coordinator with a band of
+ * "$1 - $1 USD". The parser read it correctly; the posting is a placeholder.
+ * Reported as a dollar an hour it failed the pay floor and the job disappeared,
+ * which is the worst outcome available — an unstated salary is an unknown and
+ * stays on the list, so a nonsense one should be treated the same way rather
+ * than as a wage low enough to disqualify the job.
+ */
+const NOT_A_WAGE_ANNUAL = 10_000
 
 function toNumber(token: string): number | null {
-  const k = /[kK]\s*$/.test(token)
+  const suffix = (token.match(/([kKmMbB])\s*$/)?.[1] ?? '').toLowerCase()
   const digits = token.replace(/[^\d.]/g, '')
   if (!digits) return null
   const n = Number(digits)
   if (!Number.isFinite(n)) return null
-  return k ? n * 1000 : n
+  // Ginkgo Bioworks published "$185,000k - $278,800k". A thousands suffix on a
+  // number already in the thousands is a typo in the posting, not a multiplier
+  // — applying it reported a base salary of $185 million.
+  if (suffix === 'k') return n >= 1000 ? n : n * 1000
+  if (suffix === 'm') return n * 1_000_000
+  if (suffix === 'b') return n * 1_000_000_000
+  return n
 }
 
 function periodNear(text: string, from: number, to: number): Period | null {
@@ -75,14 +115,23 @@ function inferPeriod(value: number): Period | null {
  * put an accounts-payable job in the top twenty. Magnitude settles it where
  * magnitude can: a five-figure number is a salary whatever word sits beside it.
  *
- * Only where the stated period would be absurd. A $2,000 weekly contract rate
- * and a $500 day rate are both real and both stay as written.
+ * Only where the stated period would be implausible as a year's pay. A $2,000
+ * weekly contract rate ($104k) and a $500 day rate ($130k) are both real and
+ * both stay as written; so do Formlabs' interns at $1,575-$1,950 a week.
+ *
+ * The band is $15k to $1M, not $5k to $1M. At the narrower one a Beth Israel
+ * posting reading "$39.14 - $101.14" with "per week" inside the window came to
+ * $5,259 a year, cleared the $5k bar, and an hourly rate was stored as a weekly
+ * one. Nobody is paid $101 a week.
  */
+const IMPLAUSIBLE_ANNUAL_MIN = 15_000
+const IMPLAUSIBLE_ANNUAL_MAX = 1_000_000
+
 function reconcile(period: Period, value: number): Period {
   const inferred = inferPeriod(value)
   if (!inferred || inferred === period) return period
   const annual = toAnnual(value, period)
-  return annual > 1_000_000 || annual < 5_000 ? inferred : period
+  return annual > IMPLAUSIBLE_ANNUAL_MAX || annual < IMPLAUSIBLE_ANNUAL_MIN ? inferred : period
 }
 
 export function parsePay(input: string): Pay {
@@ -111,10 +160,18 @@ export function parsePay(input: string): Pay {
     // A narrow window on purpose. Too wide and a signing bonus mentioned two
     // sentences later disqualifies the real salary range; too narrow and
     // "$5,000 signing bonus" is read as the salary.
-    const near = text.slice(Math.max(0, start - 30), Math.min(text.length, end + 22))
+    //
+    // Thirty-four after, not twenty-two: Harvard advertises a Director "responsible
+    // for the development of the School's $400M+ annual operating budget", and
+    // `budget` — already on the list — sat two characters past the old edge, so
+    // an operating budget was stored as the salary.
+    const near = text.slice(Math.max(0, start - 30), Math.min(text.length, end + 34))
     if (NOT_PAY.test(near)) continue
 
     const top = joined ? Math.max(a.value, b!.value) : a.value
+    // A wage is never this large. Reaching here means the number is the company's
+    // revenue, its funding, or a budget it manages.
+    if (top >= TOO_LARGE) continue
     let period = periodNear(text, start, end)
     if (period) period = reconcile(period, top)
     else period = inferPeriod(top)
@@ -157,6 +214,8 @@ export function parsePay(input: string): Pay {
   if (candidates.length === 0) return null
   candidates.sort((x, y) => y.score - x.score)
   const best = candidates[0]
+  const top = best.max ?? best.min
+  if (top !== null && toAnnual(top, best.period) < NOT_A_WAGE_ANNUAL) return null
   return { min: best.min, max: best.max, period: best.period, raw: best.raw }
 }
 

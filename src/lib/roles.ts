@@ -48,12 +48,37 @@ export const FAMILIES: Family[] = [
     kind: 'exclude',
     titles: /\b(?:security (?:guard|officer)|loss prevention|compliance officer|parking (?:enforcement|attendant)|code enforcement|corrections officer)\b/i,
   },
-  { id: 'coordinator', label: 'coordination', kind: 'boost', titles: /\b(?:coordinator|scheduler|liaison|administrator|administrative)\b/i },
-  { id: 'operations', label: 'operations', kind: 'boost', titles: /\b(?:operations|ops\b|facilities|logistics|warehouse lead|site lead|shift (?:lead|supervisor))\b/i },
+  {
+    id: 'coordinator',
+    label: 'coordination',
+    kind: 'boost',
+    // Twenty-six of the forty-five titles the case file asks to prioritise had
+    // no family at all, and most of them belong here: Executive Assistant,
+    // Office Manager, Records Clerk, Data Entry Clerk, Patient Access
+    // Representative. They were in the pool and invisible to the lane built
+    // for them.
+    //
+    // "Assistant" is qualified rather than bare on purpose. A bare one collects
+    // Assistant Professor, Assistant Coach and Assistant Director, which are
+    // three different jobs and none of them this one.
+    titles:
+      /\b(?:coordinator|scheduler|liaison|administrator|administrative|(?:administrative|executive|office|program|department|staff|admin|clerical) assistant|office (?:manager|assistant)|secretary|receptionist|front desk|clerk\b|data entry|intake (?:specialist|coordinator|worker)|patient access|records (?:clerk|management|specialist|technician)|mailroom)\b/i,
+  },
+  {
+    id: 'operations',
+    label: 'operations',
+    kind: 'boost',
+    // Custodial, grounds and maintenance are operations work, and the profile
+    // takes them at proper pay. They also sit on the good side of the posture
+    // rule — moving all day — which is precisely why they belong in a lane.
+    titles:
+      /\b(?:operations|ops\b|facilities|logistics|warehouse lead|site lead|shift (?:lead|supervisor)|custodian|custodial|janitor\w*|housekeep\w*|groundskeep\w*|grounds (?:worker|crew)|landscap\w*|maintenance (?:technician|worker|mechanic|assistant)|production support|project controls|business operations|patient transport)\b/i,
+  },
+  { id: 'hr', label: 'people & HR', kind: 'boost', titles: /\b(?:human resources|\bhr\b|people (?:operations|business partner|partner)|talent acquisition|recruit(?:er|ing|ment) coordinator|onboarding|benefits (?:coordinator|administrator|specialist)|payroll|employee relations)\b/i },
   { id: 'program', label: 'program & project', kind: 'boost', titles: /\b(?:program manager|project (?:manager|coordinator|specialist)|\bpmo\b|program (?:specialist|associate|assistant))\b/i },
   { id: 'analyst', label: 'analysis', kind: 'boost', titles: /\b(?:analyst|analysis|intelligence|research(?:er)?|investigat(?:or|ions)|data (?:analyst|specialist))\b/i },
   { id: 'student', label: 'student services', kind: 'boost', titles: /\b(?:student (?:affairs|services|success|life)|academic (?:advisor|coordinator)|registrar|admissions|residence life|dean of students)\b/i },
-  { id: 'technical', label: 'technical', kind: 'boost', titles: /\b(?:support engineer|solutions? (?:engineer|architect|consultant)|technical (?:support|account|program)|implementation|\bqa\b|quality assurance|software|developer|engineer)\b/i },
+  { id: 'technical', label: 'technical', kind: 'boost', titles: /\b(?:support engineer|solutions? (?:engineer|architect|consultant)|technical (?:support|account|program)|implementation|\bqa\b|quality assurance|software|developer|engineer|it support|help ?desk|desktop support|service desk|systems? administrator|audio ?visual|\bav\b tech\w*)\b/i },
 
   // The areas named as genuine pulls rather than inferred from the resume.
   {
@@ -70,9 +95,13 @@ export const FAMILIES: Family[] = [
   { id: 'education', label: 'higher education', kind: 'boost', titles: /\b(?:student (?:affairs|services|success|life|activities|involvement)|academic (?:advisor|affairs|coordinator|services)|registrar|admissions|financial aid|residence (?:life|hall)|dean|campus|enrollment|orientation|alumni|faculty (?:support|affairs)|bursar|provost)\b/i },
   { id: 'mission', label: 'mission & nonprofit', kind: 'boost', titles: /\b(?:nonprofit|non-profit|development (?:officer|associate|coordinator|manager)|fundrais|donor|grants?|volunteer|community (?:outreach|engagement|organiz)|advocacy|case (?:manager|worker)|social services|youth (?:program|development|worker)|mentor|ministry|parish|diocese|chaplain|mission)\b/i },
   { id: 'outdoors', label: 'conservation & outdoors', kind: 'boost', titles: /\b(?:conservation|environmental|park (?:ranger|manager|coordinator)|ranger|land (?:steward|manager|protection)|trail|naturalist|steward(?:ship)?|sustainab|wildlife|ecolog|forestry|watershed|farm|garden|horticultur|outdoor)\b/i },
-  { id: 'culture', label: 'libraries, museums & archives', kind: 'boost', titles: /\b(?:librar(?:y|ian)|archiv(?:e|ist|al)|museum|gallery|curator|collections|exhibit|visitor (?:services|experience)|docent|cultural|records manage|special collections|interpretation)\b/i },
+  { id: 'culture', label: 'libraries, museums & archives', kind: 'boost', // `archiv(?:e|ist|al)` closed with a word boundary, which can never match
+  // "Archives" — the boundary falls between 'e' and 's', and both are word
+  // characters. Every Archives Assistant in the pool was unclassified. Same
+  // shape of bug as the abbreviations that needed their full stops.
+  titles: /\b(?:librar(?:y|ian|ies)|archiv\w*|museum|gallery|curator|collections|exhibit|visitor (?:services|experience)|docent|cultural|records manage|special collections|interpretation)\b/i },
   { id: 'publicsafety', label: 'public safety & emergency', kind: 'boost', titles: /\b(?:emergency (?:management|preparedness|services|operations)|\beoc\b|dispatch|911|public safety|disaster|continuity of operations|incident (?:command|management)|response coordinator)\b/i },
-  { id: 'logistics', label: 'logistics & warehouse', kind: 'boost', titles: /\b(?:warehouse|fulfillment|inventory|supply chain|shipping|receiving|distribution|forklift|picker|packer|materials handler|stockroom|courier|dispatcher|fleet)\b/i },
+  { id: 'logistics', label: 'logistics & warehouse', kind: 'boost', titles: /\b(?:warehouse|fulfillment|inventory|supply chain|shipping|receiving|distribution|forklift|picker|packer|materials? (?:handler|associate|coordinator)|stockroom|courier|dispatcher|fleet|buyer|purchasing|procurement)\b/i },
   // Not jobs. A volunteer listing has no pay to fail a floor and no
   // requirements to fail a gap check, so it sails through every other rule.
   // Apprenticeships are deliberately absent — a paid trade apprenticeship is a

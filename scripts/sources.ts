@@ -224,23 +224,44 @@ async function fetchWorkday(board: Extract<Board, { ats: 'workday' }>, keep: Kee
 
   // Workday only returns a description one posting at a time, and the parsers
   // are worth nothing without it. Slow, and that is the accepted trade.
+  //
+  // Retried, because it was failing quietly and at scale. A single attempt each
+  // left 562 postings — a fifth of the whole pool, 465 of them Beth Israel and
+  // 97 Tufts Medicine — with no description at all: no requirements, nothing
+  // for the posture, hours or industry parsers to read, and no way to tell from
+  // the app that anything was missing. Six workers against one tenant is enough
+  // to get throttled, and a throttle looked exactly like a job with nothing to
+  // say. Three attempts with backoff, and the failures are counted and printed
+  // rather than swallowed.
   let cursor = 0
+  let failed = 0
+  const ATTEMPTS = 3
   const worker = async () => {
     while (cursor < near.length) {
       const row = near[cursor++]
       const id = row.id.split(':').pop()
-      try {
-        const res = await fetch(`${api}/job/${id}`, { headers: { accept: 'application/json' }, signal: AbortSignal.timeout(20000) })
-        if (!res.ok) continue
-        const d = (await res.json()) as { jobPostingInfo?: { jobDescription?: string; startDate?: string } }
-        row.descText = htmlToText(d.jobPostingInfo?.jobDescription ?? '')
-        row.postedAt = iso(d.jobPostingInfo?.startDate)
-      } catch {
-        /* a posting that will not load is still worth listing */
+      for (let attempt = 1; attempt <= ATTEMPTS; attempt++) {
+        try {
+          const res = await fetch(`${api}/job/${id}`, { headers: { accept: 'application/json' }, signal: AbortSignal.timeout(20000) })
+          if (!res.ok) {
+            // 404 means the posting is gone; retrying will not bring it back.
+            if (res.status === 404 || res.status === 410) break
+            throw new Error(String(res.status))
+          }
+          const d = (await res.json()) as { jobPostingInfo?: { jobDescription?: string; startDate?: string } }
+          row.descText = htmlToText(d.jobPostingInfo?.jobDescription ?? '')
+          row.postedAt = iso(d.jobPostingInfo?.startDate)
+          break
+        } catch {
+          if (attempt === ATTEMPTS) { failed++; break }
+          await new Promise((r) => setTimeout(r, 400 * 2 ** attempt))
+        }
       }
     }
   }
-  await Promise.all(Array.from({ length: 6 }, worker))
+  await Promise.all(Array.from({ length: 4 }, worker))
+  const blank = near.filter((r) => !r.descText.trim()).length
+  if (blank) console.log(`    ${blank} of ${near.length} postings returned no description (${failed} after ${ATTEMPTS} attempts)`)
   return near.filter((r) => r.title)
 }
 

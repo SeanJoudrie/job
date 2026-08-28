@@ -3,7 +3,7 @@ import { BOARDS } from '../src/lib/companies'
 import { dedupe } from '../src/lib/dedupe'
 import { industryOf } from '../src/lib/industry'
 import { HOME, isRemote, nearestMiles, parseLocations } from '../src/lib/location'
-import { parsePay } from '../src/lib/pay'
+import { formatPay, parsePay, toAnnual } from '../src/lib/pay'
 import { countGaps, gapsFor, parseRequirements } from '../src/lib/requirements'
 import { classifyFamilies } from '../src/lib/roles'
 import type { Job } from '../src/types'
@@ -244,6 +244,37 @@ async function main() {
     console.error(`\n  only ${merged.length} jobs survived — refusing to publish (floor is ${FLOOR}).`)
     process.exit(2)
   }
+
+  /**
+   * Does the data look like data?
+   *
+   * Every pay defect this project has shipped got through because nothing
+   * looked at the output. A company's revenue read as three dollars an hour and
+   * deleted an entire employer from every lane; a budget the role manages read
+   * as the salary; a band written "$X USD - $Y USD" was read as a single value
+   * on 103 postings, so the floor was compared against the BOTTOM of the band.
+   * None of it was visible from the code and all of it was one count away.
+   *
+   * This does not fail the run. A board changing its wording should not stop a
+   * deploy — it should be printed where somebody reads it.
+   */
+  const hourly = (job: Job) => {
+    const p = job.pay
+    if (!p) return null
+    const top = p.max ?? p.min
+    if (top === null) return null
+    return toAnnual(top, p.period) / 2080
+  }
+  const odd = merged.filter((j) => { const h = hourly(j); return h !== null && (h < 7 || h > 400) })
+  const single = merged.filter((j) => j.pay && j.pay.min !== null && j.pay.min === j.pay.max).length
+  const noDesc = merged.filter((j) => !j.descText.trim()).length
+  const noFamily = merged.filter((j) => !j.families.length).length
+  console.log('\n  data check')
+  console.log(`    ${merged.filter((j) => j.pay).length} with pay, ${single} of them a single figure rather than a band`)
+  console.log(`    ${odd.length} outside a believable rate` + (odd.length ? ':' : ''))
+  for (const j of odd.slice(0, 5)) console.log(`      ${formatPay(j.pay)}  «${j.pay?.raw}»  ${j.title.slice(0, 40)} | ${j.company}`)
+  console.log(`    ${noDesc} with no description at all${noDesc > merged.length * 0.05 ? '  <-- the parsers are blind on these' : ''}`)
+  console.log(`    ${noFamily} with no role family`)
 
   mkdirSync(DIR, { recursive: true })
 

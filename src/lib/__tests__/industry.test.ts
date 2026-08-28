@@ -241,3 +241,18 @@ describe('the two predicates the lanes need', () => {
     expect(TIER_A.has('warehouse_distribution')).toBe(false)
   })
 })
+
+describe('a biotech is not a hospital', () => {
+  // The board list files these under sector 'health', and matching the sector
+  // handed a bench-science role a tier it had not earned.
+  it('scores the hospital systems as hospital administration', () => {
+    expect(id({ title: 'Patient Access Representative', company: 'Beth Israel Lahey Health', sector: 'health' })).toBe('hospitals_health_admin')
+    expect(id({ title: 'Administrative Coordinator II', company: 'Tufts Medicine', sector: 'health' })).toBe('hospitals_health_admin')
+    expect(id({ title: 'Unit Secretary', company: 'Boston Medical Center', sector: 'health' })).toBe('hospitals_health_admin')
+  })
+  it('does not hand the same tier to a biotech', () => {
+    for (const company of ['Ginkgo Bioworks', 'Alnylam', 'Benchling', 'Butterfly Network']) {
+      expect(id({ title: 'Senior Engineer III, ADME', company, sector: 'health' }), company).not.toBe('hospitals_health_admin')
+    }
+  })
+})
