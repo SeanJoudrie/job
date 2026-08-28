@@ -238,3 +238,26 @@ describe('a band that is not a wage', () => {
     expect(meetsFloor(p, 25)).toBe('fail')
   })
 })
+
+describe('numbers found by sorting the list by money', () => {
+  // Score-ordering hid all of these. Ordering by pay put them on the first
+  // screen, which is the argument for having the sort at all.
+
+  it('joins a range across "to over", so the project cost is thrown out whole', () => {
+    // Harvard: "Capital Projects group range from ~$500K to over $100M".
+    // Unjoined, $500K stood alone and a construction analyst was stored at half
+    // a million a year.
+    expect(parsePay('Projects managed by the Capital Projects group range from ~$500K to over $100M.')).toBe(null)
+  })
+
+  it('does not read a per-student rate as an hourly one', () => {
+    expect(parsePay('Supervisors are compensated $200 per student.')).toBe(null)
+  })
+
+  it('rejects a band too wide to be one job’s pay', () => {
+    // Draper publishes "$15.00 - $225.00" across every level of a per-diem role
+    // at once. The widest genuine band in the pool is under four to one.
+    expect(parsePay('$15.00 - $225.00 Our salary ranges are determined by role, level, and location.')).toBe(null)
+    expect(parsePay('Salary range: $50,000 - $150,000 per year')?.max).toBe(150_000)
+  })
+})

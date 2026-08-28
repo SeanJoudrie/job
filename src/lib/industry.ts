@@ -74,7 +74,25 @@ type Def = {
  * today as a nursing licence is.
  */
 export const LICENSED_CLINICAL =
-  /\b(?:registered nurse|\brn\b|\blpn\b|nurse practitioner|\bnp\b|nursing assistant|certified nursing|\bcna\b|physician|surgeon|\bmd\b|resident physician|pharmacist|pharmacy tech\w*|physical therap(?:ist|y)|occupational therapist|speech pathologist|radiolog(?:ist|ic technologist)|sonograph\w*|ultrasound tech\w*|\b(?:mri|ct) tech\w*|echo tech\w*|surg(?:ical|ery) tech\w*|patient care tech\w*|medical assistant|anesthesi\w*|perfusionist|phlebotom\w*|respiratory therapist|nurse anesthetist|midwife|dentist|dental hygienist|optometrist|psychiatrist|clinical psychologist|dietitian|veterinary tech\w*|social worker \(licsw\)|\blicsw\b|\bcrna\b|\bpa-c\b)\b/i
+  new RegExp(
+    [
+      // Nursing and allied health.
+      '\\b(?:nurse|rn|lpn|np|nursing assistant|certified nursing|cna|crna|pa-c|licsw|licensed clinician|therapist)\\b',
+      '\\b(?:pharmacist|pharmacy tech\\w*|physical therap(?:ist|y)|occupational therapist|speech pathologist|respiratory therapist)\\b',
+      '\\b(?:sonograph\\w*|ultrasound tech\\w*|(?:mri|ct) tech\\w*|echo tech\\w*|surg(?:ical|ery) tech\\w*|patient care tech\\w*)\\b',
+      '\\b(?:medical assistant|perfusionist|phlebotom\\w*|midwife|dentist|dental hygienist|optometrist|dietitian|veterinary tech\\w*)\\b',
+      // Physicians. NOT prefixed with a word boundary: "\\bsurgeon\\b" cannot match
+      // "Neurosurgeon", the same way "\\barchive\\b" could never match "Archives".
+      // Sorting the list by money put seven physician posts at the top of it.
+      'surgeon\\b',
+      '\\b(?:physician|resident physician|hospitalist|internist|pediatrician|psychiatrist|clinical psychologist)\\b',
+      '(?:gastroenterolog|dermatolog|dermatiti|hepatolog|endoscop|cardiolog|neurolog|oncolog|anesthesiolog|radiolog|patholog|urolog|endocrinolog|rheumatolog|nephrolog|pulmonolog|hematolog|ophthalmolog|otolaryngolog|obstetric|gynecolog|anesthesi|neonatolog|perinatolog|intensivist|physiatr|allergist)\\w*',
+      '\\b(?:body imager|imaging physician|attending)\\b',
+      // Titles that only ever sit above a clinical department.
+      '\\b(?:medical director|division chief|chief medical officer|chair of)\\b',
+    ].join('|'),
+    'i',
+  )
 
 /**
  * TIER E — excluded. Order matters only in that exclusions are checked first;
@@ -234,6 +252,23 @@ const EXCLUDED: Def[] = [
     // "Production Assistant" is a media title and is not matched either.
     title:
       /\b(?:assembler|assembly (?:operator|technician|associate|line)|machine operator|machinist|cnc\b|production (?:associate|operator|technician|worker)|manufacturing (?:associate|technician|operator)|fabricator|welder|solderer)\b/i,
+  },
+  {
+    id: 'executive',
+    label: 'executive leadership',
+    weight: 0,
+    exclude: true,
+    /*
+     * The top of an organisation, and not a job available to someone five years
+     * in. Score already pushed these down; sorting the list by money ignores
+     * score, and the first screen filled with a hospital president, a Senior
+     * Vice President & COO and an Executive Vice President & Provost.
+     *
+     * Anchored to the start of the title on purpose. "Assistant to the
+     * President" and "Executive Assistant to the Dean" are jobs he wants, and
+     * both contain a word on this list.
+     */
+    title: /^\s*(?:(?:senior|executive)\s+)?vice president\b|^\s*president\b|^\s*chief\s+\w+\s+officer\b|^\s*(?:ceo|cfo|coo|cto|cio|provost|chancellor|general counsel)\b|^\s*(?:assistant |associate )?dean\b/i,
   },
   { id: 'clinical_licensed', label: 'licensed clinical', weight: 0, exclude: true, title: LICENSED_CLINICAL },
 ]

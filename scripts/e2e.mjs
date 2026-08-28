@@ -87,6 +87,25 @@ check('and pressing it reaches the letter writer', /Add an API key/.test(await p
 await page.getByRole('button', { name: 'clear' }).click()
 await page.waitForTimeout(300)
 
+// --- sorting the top list by money -----------------------------------------
+const hourly = (t) => { const m = t.match(/\$([\d.]+)(?:–\$([\d.]+))?\/hr/); return m ? Number(m[2] ?? m[1]) : null }
+await page.getByRole('button', { name: 'money' }).click()
+await page.waitForTimeout(700)
+const byPay = (await page.locator('li:has(> div > input) button[aria-expanded]').allInnerTexts())
+  .map(hourly).filter((n) => n !== null)
+check('sorting the top list by money really is descending', byPay.length > 3 && byPay.every((n, i) => i === 0 || byPay[i - 1] >= n),
+  byPay.slice(0, 8).join(' '))
+// The whole pool, not the top eighty re-ordered: the best-paying hourly rate on
+// Top must be at least as high as the best-paying one anywhere in the pool.
+await page.getByRole('button', { name: 'best fit' }).click()
+await page.waitForTimeout(600)
+const byFit = (await page.locator('li:has(> div > input) button[aria-expanded]').allInnerTexts()).map(hourly).filter((n) => n !== null)
+// Ranked within reach, not across the pool: pay and gettability run at
+// r = -0.76, so an honest "which pays most" is a neurosurgeon. The money sort
+// must still surface better-paid work than the fit sort does.
+check('and money really does re-rank the list', Math.max(...byPay) >= Math.max(...byFit),
+  `best paid: $${Math.max(...byPay)}/hr sorted by money vs $${Math.max(...byFit)}/hr by fit`)
+
 await page.getByRole('button', { name: 'pool' }).click()
 await page.waitForTimeout(600)
 
@@ -356,9 +375,11 @@ await page.waitForTimeout(400)
 const sheet = await page.locator('.sheet').innerText()
 // Section headings are upper-cased in CSS, so innerText comes back shouting.
 check('opening one renders a real document', /experience/i.test(sheet) && /Verizon/i.test(sheet), sheet.split('\n').slice(0, 3).join(' / '))
+// It shipped saying "Your name — set it in Settings" on every letter, which is
+// exactly the kind of thing that gets sent by accident.
+check('the documents carry his actual name, not a placeholder', /Joudrie/.test(sheet) && !/Your name/i.test(sheet), sheet.split('\n')[0])
 check('and it carries the 4.5x line, which is the strongest thing on it', /4\.5x/.test(sheet))
-check('a blank contact block says so rather than printing an empty header',
-  /set (?:it|these) in Settings/.test(sheet) || /Wakefield/.test(sheet))
+check('and the contact line is filled in', /Wakefield/.test(sheet) && /@/.test(sheet), sheet.split('\n')[1])
 
 // The letter for the same pack, and only the marked blanks in it.
 await page.getByRole('button', { name: 'letter', exact: true }).click()
@@ -391,7 +412,12 @@ check('settings names the running build', /Build \d{4}-\d{2}-\d{2}/.test(setText
 check('the pay floor is editable and on-device', /pay floor/i.test(setText))
 // The label is upper-cased in CSS, so innerText comes back shouting.
 check('the commute is set in minutes', /Commute \(minutes\)/i.test(setText))
-check('contact details are set here and stay on the device', /Full name/i.test(setText) && /never leave this device/i.test(setText))
+// An input's value is not in innerText — read the field, not the page.
+const contactName = await page.evaluate(() => {
+  const label = [...document.querySelectorAll('label')].find((l) => /full name/i.test(l.textContent ?? ''))
+  return label?.querySelector('input')?.value ?? ''
+})
+check('contact details are filled in here, not left as a placeholder', /Joudrie/i.test(contactName), contactName || 'empty')
 check('and the weights are grouped, so the 60/40 is visible', /Logistics carry 60%/.test(setText),
   (setText.match(/Logistics carry[^\n]*/) ?? [''])[0])
 check('the weights are sliders, not fixed', (await page.locator('input[type="range"]').count()) >= 5)

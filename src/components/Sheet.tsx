@@ -19,11 +19,8 @@ function withBlanks(text: string) {
 
 const Head = ({ contact }: { contact: Contact }) => (
   <>
-    <h1>{contact.name || 'Your name — set it in Settings'}</h1>
-    <p className="contact">
-      {[contact.city, contact.phone, contact.email, contact.links].filter(Boolean).join(' · ') ||
-        'City · phone · email — set these in Settings'}
-    </p>
+    <h1>{contact.name}</h1>
+    <p className="contact">{[contact.city, contact.phone, contact.email, contact.links].filter(Boolean).join(' · ')}</p>
   </>
 )
 
@@ -57,7 +54,7 @@ export function LetterSheet({ pack, contact }: { pack: Pack; contact: Contact })
       <Head contact={contact} />
       <p style={{ marginTop: 22 }}>Dear Hiring Committee,</p>
       {letterFor(pack).split('\n\n').map((para, i) => <p key={i}>{withBlanks(para)}</p>)}
-      <p style={{ marginTop: 14 }}>{contact.name || 'Your name'}</p>
+      <p style={{ marginTop: 14 }}>{contact.name}</p>
     </article>
   )
 }

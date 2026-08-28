@@ -6,7 +6,7 @@ import { loadDescriptions, loadIndex, type Index } from './lib/data'
 import { boardCount } from './lib/dedupe'
 import { defaultLanes, describeRule, LANES_VERSION, mkRule, runNet, topBaseline, type Net, type Rule } from './lib/nets'
 import { AXIS_LABELS, FIT, LOGISTICS, LOGISTICS_SHARE, rank, variantFor, type AxisId, type Ctx } from './lib/score'
-import { PER_EMPLOYER, topJobs, type TopEntry } from './lib/top'
+import { PER_EMPLOYER, topJobs, type TopEntry, type TopSort } from './lib/top'
 import { commuteOf } from './lib/commute'
 import { letterFor } from './lib/documents'
 import { PACKS, packFor, type Pack } from './lib/packs'
@@ -51,6 +51,7 @@ export default function App() {
   const [letters, setLetters] = useState<Record<string, string>>(() => read('job.letters.v1', {}))
   const [busy, setBusy] = useState<string | null>(null)
   const [doc, setDoc] = useState<OpenDoc | null>(null)
+  const [topSort, setTopSort] = useState<TopSort>(() => read<TopSort>('job.topsort.v1', 'score'))
 
   useEffect(() => {
     loadIndex().then(setIndex).catch((e: Error) => setError(e.message))
@@ -59,6 +60,7 @@ export default function App() {
   useEffect(() => void write('job.lane.v1', laneId), [laneId])
   useEffect(() => void write('job.grouped.v1', grouped), [grouped])
   useEffect(() => void write('job.view.v1', view), [view])
+  useEffect(() => void write('job.topsort.v1', topSort), [topSort])
   useEffect(() => void write('job.verdicts.v1', verdicts), [verdicts])
   useEffect(() => void write('job.letters.v1', letters), [letters])
 
@@ -213,7 +215,7 @@ export default function App() {
    */
   const best = (() => {
     const pool = runNet(jobs, topBaseline(settings.floorHourly, settings.maxMinutes), appliedKeys, keyOf).jobs
-    return topJobs(pool, settings.profile, settings.weights, { limit: 80, ctx })
+    return topJobs(pool, settings.profile, settings.weights, { limit: 80, ctx, by: topSort })
   })()
 
   const renderRow = (job: Job) => (
@@ -391,6 +393,8 @@ export default function App() {
 
       {view === 'top' && (
         <TopView
+          sort={topSort}
+          onSort={setTopSort}
           entries={best}
           profile={settings.profile}
           weights={settings.weights}
@@ -441,11 +445,6 @@ export default function App() {
               </button>
             </div>
           </div>
-          {settings.contact.name === '' && (
-            <p className="no-print px-3 py-2 text-[11px]" style={{ color: 'var(--warn)' }}>
-              Your name and contact details are blank — fill them in under Settings and they appear on every document.
-            </p>
-          )}
           {doc.kind === 'resume'
             ? <ResumeSheet pack={doc.pack} contact={settings.contact} dates={settings.dates} />
             : <LetterSheet pack={doc.pack} contact={settings.contact} />}
@@ -604,9 +603,11 @@ function VerdictBlock({ verdict, letter, variant }: { verdict?: Verdict; letter?
 }
 
 function TopView({
-  entries, profile, weights, ctx, applied, descs, expanded, selected, onToggleExpand, onToggleSelect, onApply, appliedLog, verdicts, letters, onDoc,
+  entries, sort, onSort, profile, weights, ctx, applied, descs, expanded, selected, onToggleExpand, onToggleSelect, onApply, appliedLog, verdicts, letters, onDoc,
 }: {
   entries: TopEntry[]
+  sort: TopSort
+  onSort: (s: TopSort) => void
   profile: import('./lib/requirements').Profile
   weights: import('./lib/score').Weights
   ctx: Ctx
@@ -625,6 +626,15 @@ function TopView({
   if (!entries.length) return <p className="p-4 text-sm muted">Nothing yet — the pool is empty or everything is filtered out.</p>
   return (
     <div>
+      {/* The sort drives the folding and the employer cap, not just the display
+          — so "pay" really is the best-paying work, not the best-scoring work
+          re-ordered by pay. */}
+      <div className="flex items-center gap-3 border-b line px-3 py-2 text-xs">
+        <span className="faint">sort by</span>
+        {([['score', 'best fit'], ['pay', 'money'], ['commute', 'closest'], ['newest', 'newest']] as const).map(([k, label]) => (
+          <button key={k} onClick={() => onSort(k)} style={{ color: sort === k ? 'var(--accent)' : 'var(--muted)' }}>{label}</button>
+        ))}
+      </div>
       <p className="px-3 py-2 text-[11px] faint">
         Best across every lane, ranked on fit and how winnable each one is. One entry per role — a job posted
         once per shift appears once — and no employer takes more than {PER_EMPLOYER} places, so the list shows
@@ -801,7 +811,7 @@ function SettingsView({ settings, onChange, onResetLanes }: { settings: Settings
       </div>
       <div>
         <p className="mb-1 text-[11px] uppercase tracking-wide faint">
-          Your details — they appear on every resume and letter, and never leave this device
+          Your details — they appear on every resume and letter
         </p>
         <div className="grid grid-cols-2 gap-3">
           {([

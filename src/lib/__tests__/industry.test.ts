@@ -256,3 +256,69 @@ describe('a biotech is not a hospital', () => {
     }
   })
 })
+
+describe('physicians, which sorting by money put at the top of the list', () => {
+  // "\bsurgeon\b" cannot match "Neurosurgeon" — the boundary needs a non-word
+  // character before it and there is an 'o'. Same shape as "\barchive\b" never
+  // matching "Archives". Seven physician posts led the money sort because of it.
+  const CLINICAL = [
+    'Neurosurgeon',
+    'Division Chief - Thoracic Surgery',
+    'Chair of Dermatology',
+    'Gastroenterologist- Winchester',
+    'Medical Director, Inflammatory Bowel Disease Center',
+    'Cardiologist',
+    'Staff Radiologist',
+  ]
+  for (const title of CLINICAL) {
+    it(`${title} is excluded`, () => {
+      expect(industryOf(p({ title, company: 'Beth Israel Lahey Health', sector: 'health' }), JULY).excluded).toBe(true)
+    })
+  }
+
+  it('and the coordinator who books the theatre still is not', () => {
+    for (const title of ['Surgical Services Coordinator - Orthopedics', 'Administrative Coordinator II - Neurosurgery', 'Medical Records Clerk']) {
+      expect(industryOf(p({ title, company: 'Beth Israel Lahey Health', sector: 'health' }), JULY).excluded, title).toBe(false)
+    }
+  })
+})
+
+describe('the top of an organisation', () => {
+  it('excludes the roles that are not available five years in', () => {
+    for (const title of [
+      'President Beth Israel Deaconess Needham Hospital',
+      'Senior Vice President and Chief Operating Officer',
+      'Executive Vice President and Provost',
+      'Chief Financial Officer',
+      'Dean of the College of Arts and Sciences',
+    ]) {
+      expect(industryOf(p({ title }), JULY).excluded, title).toBe(true)
+    }
+  })
+
+  it('and keeps the jobs that merely contain the same words', () => {
+    // Anchored to the start of the title: "Assistant to the President" and
+    // "Executive Assistant" are both jobs he wants.
+    for (const title of [
+      'Assistant to the President',
+      'Executive Assistant to the Dean',
+      'Staff Assistant, Office of the Provost',
+      'Assistant Director of Student Affairs',
+      'Program Director',
+    ]) {
+      expect(industryOf(p({ title }), JULY).excluded, title).toBe(false)
+    }
+  })
+})
+
+describe('nurses and therapists, whatever the title wraps them in', () => {
+  it('excludes them', () => {
+    for (const t of ['Clinical Nurse Manager - Labor and Delivery', 'Nurse Navigator', 'Expressive Arts Therapist and Licensed Clinician', 'Registered Nurse - ICU'])
+      expect(industryOf(p({ title: t }), JULY).excluded, t).toBe(true)
+  })
+  it('and still keeps the administrative jobs beside them', () => {
+    // "\bnurse\b" cannot match "Nursing", which is what keeps these in.
+    for (const t of ['Assistant Director, Nursing Programs', 'Nursing Administrative Coordinator', 'Unit Secretary'])
+      expect(industryOf(p({ title: t }), JULY).excluded, t).toBe(false)
+  })
+})

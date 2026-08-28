@@ -142,3 +142,30 @@ describe('the documents say only what the resume says', () => {
     expect(resumeFor(PACKS.find((p) => p.id === 'public')!, DEFAULT_DATES).roles[0].org).toMatch(/National Guard/)
   })
 })
+
+describe('the contact block is filled in, not a placeholder', () => {
+  it('ships his actual details rather than "Your name"', async () => {
+    const { DEFAULTS } = await import('../settings')
+    expect(DEFAULTS.contact.name).toMatch(/Joudrie/)
+    expect(DEFAULTS.contact.phone).toBeTruthy()
+    expect(DEFAULTS.contact.email).toMatch(/@/)
+  })
+
+  it('falls back per field, so a half-filled block still prints the rest', async () => {
+    // A blank field is one never filled in, not one deliberately emptied, and a
+    // letter opening "Your name" is the kind of thing you send by accident.
+    const data: Record<string, string> = { 'job.settings.v3': JSON.stringify({ contact: { name: '', city: 'Boston, MA' } }) }
+    globalThis.localStorage = {
+      getItem: (k: string) => data[k] ?? null,
+      setItem: (k: string, v: string) => void (data[k] = v),
+      removeItem: (k: string) => void delete data[k],
+      clear: () => void Object.keys(data).forEach((k) => delete data[k]),
+      key: () => null,
+      length: 0,
+    } as unknown as Storage
+    const { loadSettings, DEFAULTS } = await import('../settings')
+    const s = loadSettings()
+    expect(s.contact.name).toBe(DEFAULTS.contact.name)
+    expect(s.contact.city).toBe('Boston, MA')
+  })
+})

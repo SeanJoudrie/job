@@ -26,7 +26,7 @@ const TRAPS: RegExp[] = [
 
 /** Money near these words is not the salary. */
 const NOT_PAY =
-  /\b(bonus|equity|stock|rsu|match(?:ing)?|reimburse|stipend|tuition|referral|relocation|budget|revenue|savings|deductible|premium|arr\b|valuation|funding|raised|in sales|under management|endowment|grant)\b/i
+  /\b(bonus|equity|stock|rsu|match(?:ing)?|reimburse|stipend|tuition|referral|relocation|budget|revenue|savings|deductible|premium|arr\b|valuation|funding|raised|in sales|under management|endowment|grant|capital project|per (?:student|participant|session|class|course|credit|unit|visit|case))\b/i
 
 const PERIODS: [RegExp, Period][] = [
   [/(?:per\s+hour|hourly|an?\s+hour|\/\s*(?:hr|hour)s?|\bhrs?\b)/i, 'hour'],
@@ -57,7 +57,14 @@ const MONEY = /(\$\s*\d[\d,]*(?:\.\d+)?\s*[kKmMbB]?)|(\b\d[\d,]*(?:\.\d+)?\s*[kK
  * compared against the BOTTOM of the band — the exact mistake `meetsFloor`
  * exists to prevent.
  */
-const SEP = /^\s*(?:USD|CAD|per\s+year|annually)?\s*(?:-|–|—|to|through|up\s+to)\s*$/i
+/*
+ * "to over" and "to more than" are joins too. Without them Harvard's
+ * "Capital Projects group range from ~$500K to over $100M" did not join, so
+ * $500K was taken alone and a construction analyst was stored at half a million
+ * a year. Joined, the range's top is $100M, which TOO_LARGE throws out — which
+ * is the right answer for a sentence about project sizes.
+ */
+const SEP = /^\s*(?:USD|CAD|per\s+year|annually)?\s*(?:-|–|—|to|through|up\s+to)(?:\s+(?:over|more\s+than|about|approximately))?\s*$/i
 
 /** No wage is quoted in millions. Anything this large is a company statistic. */
 const TOO_LARGE = 1_000_000
@@ -73,6 +80,9 @@ const TOO_LARGE = 1_000_000
  * than as a wage low enough to disqualify the job.
  */
 const NOT_A_WAGE_ANNUAL = 10_000
+
+/** Top-to-bottom ratio past which a "range" is a rate card, not a salary. */
+const WIDEST_REAL_BAND = 8
 
 function toNumber(token: string): number | null {
   const suffix = (token.match(/([kKmMbB])\s*$/)?.[1] ?? '').toLowerCase()
@@ -216,6 +226,10 @@ export function parsePay(input: string): Pay {
   const best = candidates[0]
   const top = best.max ?? best.min
   if (top !== null && toAnnual(top, best.period) < NOT_A_WAGE_ANNUAL) return null
+  // A band this wide is not one job's pay. Draper publishes
+  // "$15.00 - $225.00" across every level of a per-diem role at once; the
+  // widest genuine band in the pool is under four to one.
+  if (best.min !== null && best.max !== null && best.min > 0 && best.max / best.min > WIDEST_REAL_BAND) return null
   return { min: best.min, max: best.max, period: best.period, raw: best.raw }
 }
 
