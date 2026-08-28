@@ -255,7 +255,10 @@ with people. Low-demand, not low-contact.
 - Posting age is shown on every row
 - **Reposts are detected and flagged.** A req that reappears every 30 days is
   usually dead, and applying to it is where applications quietly go to die.
-- Anything past a set age is de-weighted rather than hidden
+- **Stale and reposted listings are down-ranked and flagged, never hidden.** A
+  dead req occasionally revives, and hiding one makes every count a lie. The
+  flag says what is suspected and the ranking acts on it; the decision stays
+  with the person reading it.
 
 This needs no infrastructure: the scheduled scan commits its results, so **the
 repo's own git history is the posting-age database.** First-seen date and repost
@@ -297,7 +300,10 @@ Each entry records the date, which link was used, which resume variant went out,
 and which cover letter. Statuses move `applied → replied → interviewing →
 offer / rejected`, and anything sitting untouched past a set age is marked
 **`ghosted`** rather than left ambiguous — that is what happened, and a log that
-won't say so is less useful than one that will.
+won't say so is less useful than one that will. **The threshold is 21 days.**
+Three weeks without a reply is not a shortlist, and calling it early keeps the
+counts honest rather than leaving dead applications inflating an "in progress"
+number for months.
 
 What it buys, beyond a list:
 
@@ -378,8 +384,10 @@ The mechanics, which are not secret:
 - **Normalise everything to one unit** before comparing — hourly, annual,
   monthly, and weekly all appear, and a floor that only understands one of them
   silently drops the rest.
-- **Unlisted pay is included by default**, tagged `no pay listed` so it is
-  visibly an unknown rather than a silent pass. Roughly half of postings carry
+- **Unlisted pay is included and tagged `no pay listed`, not down-ranked.** It
+  is an unknown, not a negative — plenty of them pay well, and pushing them down
+  would quietly recreate the filtering-by-invisible-rule problem this app exists
+  to solve. Roughly half of postings carry
   no number, and excluding them to enforce a floor removes more good jobs than
   bad ones. A separate toggle hides them for anyone who wants that.
 - **A high-fit override relaxes the floor.** One configurable step down, applied
@@ -406,6 +414,5 @@ right to be on the list at all.
 
 - Whether the paste box parses alert emails on-device or needs a small parser
   service (on-device preferred; some HTML is hostile)
-- Whether stale and reposted listings are hidden or shown down-ranked
-- Whether `no pay listed` is down-ranked rather than merely tagged
-- How long an application sits before the log calls it ghosted
+- Whether the applied log should also track referrals and recruiter contacts,
+  or stay strictly a record of submitted applications
