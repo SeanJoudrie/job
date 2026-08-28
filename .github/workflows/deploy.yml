@@ -1,0 +1,70 @@
+name: Scan and deploy
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    # Nightly. The pool is simply there in the morning.
+    - cron: '0 8 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+
+      # Slow on purpose: full descriptions, every board, every link checked.
+      # Exits non-zero rather than publishing an empty board, so a bad night
+      # leaves yesterday's deploy live instead of replacing it with nothing.
+      - name: Scan the boards
+        run: npm run scan
+
+      - run: npm run build
+
+      - name: Check it in a browser
+        run: |
+          npx playwright install --with-deps chromium
+          npm run preview &
+          npx wait-on http://127.0.0.1:4174 -t 60000
+          npm run e2e
+
+      # Only the first-seen history is kept. It is the one thing that cannot be
+      # refetched, and it is what makes repost detection possible.
+      - name: Keep the posting history
+        if: github.event_name != 'push'
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/history.json
+          git diff --staged --quiet || git commit -m "Posting history $(date -u +%Y-%m-%d) [skip ci]"
+          git push
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
