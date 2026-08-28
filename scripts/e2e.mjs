@@ -40,12 +40,19 @@ check('and they descend by score', topRows.every((r, i) => i === 0 || topRows[i 
   topRows.slice(0, 6).map((r) => r.score).join(' '))
 
 // One employer posting a role once per shift must not own the list.
+// Read the employer from the row's own meta line. An earlier version matched
+// nothing and asserted over an empty object, which passes while proving
+// nothing at all.
 const employers = await page.evaluate(() =>
-  [...document.querySelectorAll('li:has(> div > input)')].slice(0, 15)
-    .map((li) => li.textContent?.match(/\n\s*([^·\n]+?)\s*·/)?.[1]?.trim() ?? ''))
-const counts = employers.reduce((m, e) => (e ? { ...m, [e]: (m[e] ?? 0) + 1 } : m), {})
+  // The row's second div is its meta line; the first holds the score and title.
+  [...document.querySelectorAll('li:has(> div > input) button[aria-expanded] > div + div')]
+    .slice(0, 15)
+    .map((d) => (d.querySelector('span')?.textContent ?? '').trim())
+    .filter(Boolean))
+const counts = employers.reduce((m, e) => ({ ...m, [e]: (m[e] ?? 0) + 1 }), {})
 const worst = Math.max(0, ...Object.values(counts))
-check('no employer takes more than three places', worst <= 3, JSON.stringify(counts).slice(0, 110))
+check('the employer of each top row is readable at all', employers.length >= 10, `${employers.length} read`)
+check('and no employer takes more than three places', worst > 0 && worst <= 3, JSON.stringify(counts).slice(0, 130))
 
 // Top is a recommendation, so it obeys the pay floor the lanes do.
 const belowFloor = await page.evaluate(() =>
