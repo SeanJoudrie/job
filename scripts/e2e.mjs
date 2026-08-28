@@ -145,10 +145,33 @@ await page.waitForTimeout(400)
 
 // --- sorting ---------------------------------------------------------------
 await page.getByLabel('Sort').selectOption('commute')
-await page.waitForTimeout(400)
+await page.waitForTimeout(500)
+
+// Grouped, rows are sorted within each employer, so reading straight down the
+// screen is legitimately not monotonic — the flat list is where a global sort
+// can actually be checked.
+await page.getByRole('button', { name: 'flat list' }).click()
+await page.waitForTimeout(600)
 const miles = (await rows().allInnerTexts()).map((t) => Number((t.match(/(\d+) mi/) ?? [])[1])).filter(Number.isFinite)
 const ascending = miles.every((m, i) => i === 0 || miles[i - 1] <= m)
-check('sorting by commute really is ascending', ascending, miles.slice(0, 8).join(','))
+check('sorting by commute really is ascending', ascending, miles.slice(0, 10).join(','))
+
+await page.getByRole('button', { name: 'group by employer' }).click()
+await page.waitForTimeout(600)
+// And grouped, the employers themselves must be ordered by their nearest job,
+// or "sort by commute" would mean nothing once the list is grouped.
+const groupOrder = await page.evaluate(() => {
+  const out = []
+  for (const li of document.querySelectorAll('main > ul > li')) {
+    const rows = [...li.querySelectorAll('li')]
+      .map((r) => Number((r.textContent?.match(/(\d+) mi/) ?? [])[1]))
+      .filter(Number.isFinite)
+    if (rows.length) out.push(Math.min(...rows))
+  }
+  return out
+})
+check('and grouped, employers are ordered by their nearest job',
+  groupOrder.every((m, i) => i === 0 || groupOrder[i - 1] <= m), groupOrder.slice(0, 8).join(','))
 
 await page.getByLabel('Sort').selectOption('pay')
 await page.waitForTimeout(400)

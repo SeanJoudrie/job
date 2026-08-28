@@ -78,7 +78,7 @@ export const FAMILIES: Family[] = [
  */
 const SOLO = /\b(?:independent contributor|individual contributor role|self-?directed|works? independently with (?:minimal|little|no) supervision|lone worker|minimal supervision)\b/i
 
-export function classifyFamilies(title: string, body: string): string[] {
+export function classifyFamilies(title: string, body: string, company = ''): string[] {
   const out = new Set<string>()
   for (const f of FAMILIES) {
     if (f.titles.test(title)) {
@@ -95,6 +95,11 @@ export function classifyFamilies(title: string, body: string): string[] {
     if (hits >= 3) out.add('sales')
   }
   if (SOLO.test(body)) out.add('solo')
+
+  // Veterans work is rarely in the title — it is in who the employer is, or in
+  // a federal posting's hiring path, which is a scored advantage rather than a
+  // line someone might notice.
+  if (/\bveteran/i.test(company) || /\bhiring paths:[^.]*\bveterans\b/i.test(body)) out.add('veterans')
   return [...out]
 }
 

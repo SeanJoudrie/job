@@ -305,7 +305,14 @@ export type UsaJobsItem = {
     QualificationSummary?: string
     PublicationStartDate?: string
     PositionRemuneration?: { MinimumRange?: string; MaximumRange?: string; RateIntervalCode?: string }[]
-    UserArea?: { Details?: { JobSummary?: string; MajorDuties?: string[]; Requirements?: string } }
+    UserArea?: {
+      Details?: {
+        JobSummary?: string; MajorDuties?: string[]; Requirements?: string
+        Education?: string; Evaluations?: string; KeyRequirements?: string[]
+        SecurityClearance?: string; HiringPathDisplay?: string[]; RemoteIndicator?: boolean
+        TotalOpenings?: string
+      }
+    }
   }
 }
 
@@ -318,6 +325,17 @@ export function mapUsaJobs(items: UsaJobsItem[]): Raw[] {
     const details = d.UserArea?.Details
     const pay = d.PositionRemuneration?.[0]
     const period = RATE[pay?.RateIntervalCode ?? ''] ?? 'year'
+    // Federal postings put the qualifying text in Education, Requirements and
+    // QualificationSummary rather than the summary. Reading only the summary
+    // found requirements in 12% of them against 99% everywhere else.
+    const paths = details?.HiringPathDisplay ?? []
+    const clearance = details?.SecurityClearance ?? ''
+    const extras = [
+      paths.length ? `Hiring paths: ${paths.join(', ')}.` : '',
+      // A stated level is an eligibility bar, not a held clearance: federal
+      // hiring runs the investigation as part of onboarding.
+      clearance && !/not required/i.test(clearance) ? `Security clearance: must be able to obtain ${clearance}.` : '',
+    ]
     out.push({
       id: `usajobs:${item.MatchedObjectId}`,
       source: 'usajobs' as Source,
@@ -326,9 +344,19 @@ export function mapUsaJobs(items: UsaJobsItem[]): Raw[] {
       title: d.PositionTitle,
       url: d.ApplyURI?.[0] ?? d.PositionURI ?? '',
       descText: htmlToText(
-        [details?.JobSummary ?? '', (details?.MajorDuties ?? []).join('\n'), d.QualificationSummary ?? '', details?.Requirements ?? ''].join('\n\n'),
+        [
+          details?.JobSummary ?? '',
+          (details?.MajorDuties ?? []).join('\n'),
+          d.QualificationSummary ?? '',
+          details?.Education ?? '',
+          details?.Requirements ?? '',
+          (details?.KeyRequirements ?? []).join('\n'),
+          ...extras,
+        ].join('\n\n'),
       ),
-      locationRaw: (d.PositionLocation ?? []).map((l) => l.LocationName ?? '').filter(Boolean).join('; '),
+      locationRaw: details?.RemoteIndicator
+        ? 'Remote'
+        : (d.PositionLocation ?? []).map((l) => l.LocationName ?? '').filter(Boolean).join('; '),
       payHint: pay?.MinimumRange ? `$${pay.MinimumRange} - $${pay.MaximumRange ?? pay.MinimumRange} per ${period}` : '',
       postedAt: iso(d.PublicationStartDate),
     })

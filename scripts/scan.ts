@@ -91,7 +91,7 @@ function enrich(raw: Raw): Job | null {
     remote,
     pay,
     requirements: parseRequirements(raw.descText),
-    families: classifyFamilies(raw.title, raw.descText),
+    families: classifyFamilies(raw.title, raw.descText, raw.company),
     postedAt: raw.postedAt,
     firstSeen: TODAY,
     lastSeen: TODAY,
