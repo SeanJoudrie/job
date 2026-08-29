@@ -21,6 +21,7 @@ export type Board =
   | ({ ats: 'lever' } & Common)
   | ({ ats: 'ashby' } & Common)
   | ({ ats: 'workable' } & Common)
+  | ({ ats: 'silkroad' } & Common)
   | ({ ats: 'smartrecruiters' } & Common)
   | ({ ats: 'workday'; wd: number; site: string } & Common)
 
@@ -44,6 +45,15 @@ export const BOARDS: Board[] = [
   { ats: 'smartrecruiters', token: 'harvarduniversity', name: 'Harvard University', sector: 'university', region: 'Cambridge, MA' },
   { ats: 'workday', token: 'berklee', wd: 1, site: 'BerkleeCareers', name: 'Berklee', sector: 'university', region: 'Boston, MA' },
   { ats: 'workday', token: 'bentley', wd: 503, site: 'staff', name: 'Bentley University', sector: 'university', region: 'Waltham, MA' },
+  { ats: 'workday', token: 'emerson', wd: 5, site: 'emerson_college_staff', name: 'Emerson College', sector: 'university', region: 'Boston, MA' },
+  { ats: 'workday', token: 'simmons', wd: 504, site: 'simmons-careers', name: 'Simmons University', sector: 'university', region: 'Boston, MA' },
+  { ats: 'workday', token: 'wit', wd: 1, site: 'wit', name: 'Wentworth Institute', sector: 'university', region: 'Boston, MA' },
+  { ats: 'workday', token: 'wellesley', wd: 1, site: 'wellesley-staff', name: 'Wellesley College', sector: 'university', region: 'Wellesley, MA' },
+  { ats: 'workday', token: 'endicott', wd: 1, site: 'endicott', name: 'Endicott College', sector: 'university', region: 'Beverly, MA' },
+  // The largest employer in range that publishes a board readable without a
+  // browser. Tufts is on iCIMS and MIT on a JavaScript app; neither returns a
+  // posting to anything but Chrome.
+  { ats: 'silkroad', token: 'BU', name: 'Boston University', sector: 'university', region: 'Boston, MA' },
 
   // Health systems — the largest employers in the region and full of
   // coordination, scheduling, records and operations work that is not clinical.

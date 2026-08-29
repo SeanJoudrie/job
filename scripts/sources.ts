@@ -99,6 +99,7 @@ export const isLicensedClinical = (title: string) => LICENSED_CLINICAL.test(titl
 export async function fetchBoard(board: Board, keep: Keep = () => true): Promise<Raw[]> {
   if (board.ats === 'workday') return fetchWorkday(board, keep)
   if (board.ats === 'workable') return fetchWorkable(board)
+  if (board.ats === 'silkroad') return fetchSilkRoad(board)
   if (board.ats === 'smartrecruiters') return fetchSmartRecruiters(board)
 
   if (board.ats === 'greenhouse') {
@@ -263,6 +264,127 @@ async function fetchWorkday(board: Extract<Board, { ats: 'workday' }>, keep: Kee
   const blank = near.filter((r) => !r.descText.trim()).length
   if (blank) console.log(`    ${blank} of ${near.length} postings returned no description (${failed} after ${ATTEMPTS} attempts)`)
   return near.filter((r) => r.title)
+}
+
+/**
+ * SilkRoad, which is what Boston University runs on.
+ *
+ * No JSON anywhere: a paginated HTML list, ten to a page, and a detail page per
+ * posting. Both are server-rendered, which is the whole reason this is worth
+ * doing — Tufts is on iCIMS and MIT on a JavaScript app, and neither returns a
+ * posting to anything that is not a browser. BU is the largest employer within
+ * range that publishes readable HTML, and its first page of listings is three
+ * Administrative Coordinators.
+ *
+ * The detail page is sliced between two class markers rather than parsed as a
+ * tree. That is fragile against a redesign, so the scan's data check reports a
+ * board that returns nothing, and this returns an empty list rather than
+ * throwing — one employer changing its markup must not take the run down.
+ */
+/**
+ * BU's hiring range, rejoined.
+ *
+ * "Expected Hiring Range Minimum $24.00 ... Maximum $27.00" is one band written
+ * as two separately labelled figures, so parsePay sees only the first and reads
+ * the BOTTOM of the range — the one number a pay floor must never be compared
+ * against. Every BU posting failed a $25 floor on its own minimum.
+ *
+ * The unit is never stated and BU uses all three: $24.00 hourly, $45,000.00
+ * annual, and $2,091.00 against a salary grade that is monthly or biweekly with
+ * nothing on the page to say which. Magnitude settles the first two and cannot
+ * settle the third, so the third is left out and the job reads "no pay listed".
+ * A wrong number is worse than none — it silently filters the job in or out.
+ *
+ * Labelled "Pay range" so that it still wins if it is ever parsed alongside the
+ * description rather than ahead of it: parsePay ranks a figure sitting next to
+ * a pay word above a merely joined range, and the page's own wording contains
+ * "Range".
+ */
+export function silkRoadPayHint(body: string): string {
+  const num = (v: string | undefined) => (v ? Number(v.replace(/,/g, '')) : null)
+  const min = num(body.match(/Expected Hiring Range Minimum\s*\$([\d,.]+)/i)?.[1])
+  const max = num(body.match(/Expected Hiring Range Maximum\s*\$([\d,.]+)/i)?.[1])
+  if (min === null || max === null) return ''
+  const unit = max < 250 ? ' per hour' : max >= 15_000 ? ' per year' : ''
+  return unit ? `Pay range: $${min} - $${max}${unit}` : ''
+}
+
+async function fetchSilkRoad(board: Extract<Board, { ats: 'silkroad' }>): Promise<Raw[]> {
+  const base = `https://jobs.silkroad.com/${board.token}/External`
+  const UA = { 'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/125 Safari/537.36' }
+  const text = async (url: string) => {
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        const res = await fetch(url, { headers: UA, signal: AbortSignal.timeout(25000) })
+        if (res.ok) return await res.text()
+        if (res.status === 404 || res.status === 410) return ''
+        throw new Error(String(res.status))
+      } catch {
+        if (attempt === 3) return ''
+        await new Promise((r) => setTimeout(r, 400 * 2 ** attempt))
+      }
+    }
+    return ''
+  }
+
+  // Walk the pager until a page introduces nothing new. The pager itself only
+  // ever shows two page links, so it cannot be read for a total.
+  const ids = new Set<string>()
+  for (let page = 1; page <= 60; page++) {
+    const before = ids.size
+    for (const m of (await text(`${base}?page=${page}`)).matchAll(/\/jobs\/(\d+)/g)) ids.add(m[1])
+    if (ids.size === before) break
+  }
+
+  const out: Raw[] = []
+  const list = [...ids]
+  let cursor = 0
+  const worker = async () => {
+    while (cursor < list.length) {
+      const id = list[cursor++]
+      const url = `${base}/jobs/${id}`
+      const page = await text(url)
+      const marker = page.indexOf('sr-job-detail__description')
+      if (marker < 0) continue
+      // Past the end of the attribute, or the class name itself lands in the
+      // preview text and is the first thing shown on the row.
+      const from = page.indexOf('>', marker) + 1
+      const to = page.indexOf('sr-job-detail__cta', from)
+      const body = htmlToText(page.slice(from, to > from ? to : from + 40_000))
+      const title = (page.match(/sr-job-detail__job-title[^>]*>([^<]{3,140})/)?.[1] ?? '').trim()
+      if (!title) continue
+
+      /*
+       * "Expected Hiring Range Minimum $24.00 ... Maximum $27.00" is one band
+       * written as two separately labelled figures, so parsePay sees only the
+       * first and reads the BOTTOM of the range — the one number a pay floor
+       * must never be compared against. Rejoined here.
+       *
+       * The unit is never stated, and BU uses all three: $24.00 hourly,
+       * $45,000.00 annual and $2,091.00 for a salary grade that is monthly or
+       * biweekly with nothing on the page to say which. Magnitude settles the
+       * first two and cannot settle the third, so the third is left out
+       * entirely and the job reads as "no pay listed". A wrong number is worse
+       * than no number: it silently filters the job in or out.
+       */
+
+      out.push({
+        id: `silkroad:${board.token}:${id}`,
+        source: 'silkroad' as Source,
+        company: board.name,
+        sector: board.sector,
+        title: decodeEntities(title),
+        url,
+        descText: body,
+        locationRaw: (body.match(/Job Location\s*\n?\s*([^\n]{3,60})/i)?.[1] ?? '').trim(),
+        payHint: silkRoadPayHint(body),
+        regionHint: board.region,
+        postedAt: iso(body.match(/Posted Date\s*\n?\s*(\d{1,2}\/\d{1,2}\/\d{4})/i)?.[1] ?? undefined),
+      })
+    }
+  }
+  await Promise.all(Array.from({ length: 4 }, worker))
+  return out
 }
 
 async function fetchWorkable(board: Extract<Board, { ats: 'workable' }>): Promise<Raw[]> {

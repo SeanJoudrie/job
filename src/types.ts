@@ -1,4 +1,4 @@
-export type Source = 'greenhouse' | 'lever' | 'ashby' | 'workday' | 'workable' | 'smartrecruiters' | 'usajobs' | 'paste'
+export type Source = 'greenhouse' | 'lever' | 'ashby' | 'workday' | 'workable' | 'smartrecruiters' | 'usajobs' | 'paste' | 'silkroad'
 
 export type Period = 'hour' | 'day' | 'week' | 'month' | 'year'
 

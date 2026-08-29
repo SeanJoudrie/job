@@ -103,8 +103,15 @@ const byFit = (await page.locator('li:has(> div > input) button[aria-expanded]')
 // Ranked within reach, not across the pool: pay and gettability run at
 // r = -0.76, so an honest "which pays most" is a neurosurgeon. The money sort
 // must still surface better-paid work than the fit sort does.
-check('and money really does re-rank the list', Math.max(...byPay) >= Math.max(...byFit),
-  `best paid: $${Math.max(...byPay)}/hr sorted by money vs $${Math.max(...byFit)}/hr by fit`)
+//
+// Medians, not maxima. The per-employer cap can drop a high payer out of the
+// money ordering while it survives the fit ordering, so "the best-paid row is
+// at least as well paid" is not actually an invariant — it failed on a real
+// pool. What the sort promises is that the LIST is better paid, not that it
+// contains the single best-paid row.
+const median = (xs) => [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)]
+check('and money really does re-rank the list', median(byPay) > median(byFit),
+  `median $${median(byPay)}/hr sorted by money vs $${median(byFit)}/hr by fit`)
 
 await page.getByRole('button', { name: 'pool' }).click()
 await page.waitForTimeout(600)
@@ -123,6 +130,11 @@ check('the header states how many were scanned', /\d{3,} scanned/.test(header), 
 
 // --- lanes -----------------------------------------------------------------
 const laneText = await laneChips.allInnerTexts()
+// Higher education is the strongest fit on the whole profile, and the lane ran
+// on seven schools when there are forty within half an hour.
+const eduCount = Number((laneText.find((t) => /Higher ed/.test(t)) ?? '').match(/(\d+)/)?.[1] ?? 0)
+check('the higher education lane is not running on a handful of schools', eduCount > 250, `${eduCount} jobs`)
+
 check('every lane carries its own count', laneText.every((t) => /\d/.test(t)), laneText.join(' | ').slice(0, 90))
 
 // Counting rendered rows does not work here: employers are collapsed, so two
