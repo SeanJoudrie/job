@@ -9,6 +9,7 @@ import { AXIS_LABELS, FIT, LOGISTICS, LOGISTICS_SHARE, rank, variantFor, type Ax
 import { PER_EMPLOYER, topJobs, type TopEntry, type TopSort } from './lib/top'
 import { commuteOf } from './lib/commute'
 import { letterFor } from './lib/documents'
+import { buildMatch, type Match } from './lib/match'
 import { PACKS, packFor, type Pack } from './lib/packs'
 import { LetterSheet, ResumeSheet } from './components/Sheet'
 import { industryFor } from './lib/industry'
@@ -112,7 +113,7 @@ export default function App() {
   }, [filtered, query])
 
   const sorted = useMemo(() => {
-    const withScore = searched.map((j) => ({ j, s: rank(j, settings.profile, settings.weights, ctx).score }))
+    const withScore = searched.map((j) => ({ j, s: rank(j, settings.profile, settings.weights, ctx).exact }))
     const cmp: Record<Sort, (a: (typeof withScore)[0], b: (typeof withScore)[0]) => number> = {
       fit: (a, b) => b.s - a.s,
       commute: (a, b) => minutesOf(a.j) - minutesOf(b.j),
@@ -144,7 +145,7 @@ export default function App() {
     return [...byCompany.entries()].map(([company, jobs]) => ({
       company,
       jobs,
-      best: Math.max(...jobs.map((j) => rank(j, settings.profile, settings.weights, ctx).score)),
+      best: Math.max(...jobs.map((j) => rank(j, settings.profile, settings.weights, ctx).exact)),
     }))
   }, [sorted, grouped, settings, ctx])
 
@@ -213,6 +214,17 @@ export default function App() {
    * lane uses — radius, pay floor, no sales, nothing already applied to — then
    * ranked without regard to which lane a job belongs to.
    */
+  /**
+   * The denominator is the baseline pool — everything actually in range, above
+   * the floor and not excluded — not the whole index. "Better than 93% of what
+   * is out there for you" has to mean the jobs he could take, or it is flattered
+   * by two thousand postings that were never candidates.
+   */
+  const match: Match = useMemo(() => {
+    const pool = runNet(jobs, topBaseline(settings.floorHourly, settings.maxMinutes), appliedKeys, keyOf).jobs
+    return buildMatch(pool.map((j) => rank(j, settings.profile, settings.weights, ctx).exact))
+  }, [jobs, appliedKeys, settings, ctx])
+
   const best = (() => {
     const pool = runNet(jobs, topBaseline(settings.floorHourly, settings.maxMinutes), appliedKeys, keyOf).jobs
     return topJobs(pool, settings.profile, settings.weights, { limit: 80, ctx, by: topSort })
@@ -225,6 +237,7 @@ export default function App() {
         profile={settings.profile}
         weights={settings.weights}
         ctx={ctx}
+        matchOf={match}
         applied={appliedKeys.has(keyOf(job))}
         selected={selected.has(job.id)}
         expanded={expanded.has(job.id)}
@@ -410,6 +423,7 @@ export default function App() {
           verdicts={verdicts}
           letters={letters}
           onDoc={(pack, kind) => setDoc({ pack, kind })}
+          matchOf={match}
         />
       )}
 
@@ -603,7 +617,7 @@ function VerdictBlock({ verdict, letter, variant }: { verdict?: Verdict; letter?
 }
 
 function TopView({
-  entries, sort, onSort, profile, weights, ctx, applied, descs, expanded, selected, onToggleExpand, onToggleSelect, onApply, appliedLog, verdicts, letters, onDoc,
+  entries, sort, onSort, profile, weights, ctx, applied, descs, expanded, selected, onToggleExpand, onToggleSelect, onApply, appliedLog, verdicts, letters, onDoc, matchOf,
 }: {
   entries: TopEntry[]
   sort: TopSort
@@ -622,6 +636,7 @@ function TopView({
   verdicts: Record<string, Verdict>
   letters: Record<string, string>
   onDoc: (pack: Pack, kind: 'resume' | 'letter') => void
+  matchOf: Match
 }) {
   if (!entries.length) return <p className="p-4 text-sm muted">Nothing yet — the pool is empty or everything is filtered out.</p>
   return (
@@ -648,6 +663,7 @@ function TopView({
               profile={profile}
               weights={weights}
               ctx={ctx}
+              matchOf={matchOf}
               applied={applied.has(keyOf(e.job))}
               selected={selected.has(e.job.id)}
               expanded={expanded.has(e.job.id)}

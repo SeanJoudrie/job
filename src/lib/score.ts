@@ -288,6 +288,21 @@ export function fitOf(axes: Axis[], weights: Weights = DEFAULT_WEIGHTS): number 
   return logisticsOf(axes, weights) * LOGISTICS_SHARE + industryFitOf(axes, weights) * (1 - LOGISTICS_SHARE)
 }
 
+/**
+ * The score before rounding.
+ *
+ * `scoreOf` rounds to one decimal, which is right for display and wrong for
+ * ranking: over the real pool it leaves about forty distinct values across two
+ * thousand jobs, so the top of a percentile came out as ten jobs all reading
+ * 10.0. The match is built from this instead.
+ */
+export function scoreExactOf(axes: Axis[], weights: Weights = DEFAULT_WEIGHTS, gettable = 10, excluded = false): number {
+  const blended = fitOf(axes, weights) * (1 - GETTABLE_SHARE) + gettable * GETTABLE_SHARE
+  let capped = gettable <= IMPOSSIBLE ? Math.min(blended, IMPOSSIBLE_CEILING) : blended
+  if (excluded) capped = Math.min(capped, EXCLUDED_CEILING)
+  return capped
+}
+
 export function scoreOf(axes: Axis[], weights: Weights = DEFAULT_WEIGHTS, gettable = 10, excluded = false): number {
   const blended = fitOf(axes, weights) * (1 - GETTABLE_SHARE) + gettable * GETTABLE_SHARE
   // The blend alone still lets a superb, unwinnable job creep up the list, and
@@ -315,6 +330,8 @@ export function rank(job: Job, profile: Profile, weights: Weights = DEFAULT_WEIG
     logistics: round(logisticsOf(axes, weights)),
     fit: rawFit(axes, weights),
     score: scoreOf(axes, weights, gettable.score, industry.excluded),
+    /** Unrounded, for ranking. See scoreExactOf. */
+    exact: scoreExactOf(axes, weights, gettable.score, industry.excluded),
   }
 }
 

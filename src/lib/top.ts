@@ -42,6 +42,8 @@ export function roleKey(job: Job): string {
 export type TopEntry = {
   job: Job
   score: number
+  /** Unrounded, so display order and sort order cannot disagree. */
+  exact: number
   fit: number
   gettable: number
   /** other postings of the same role at the same employer, folded in */
@@ -71,8 +73,10 @@ export type TopSort = 'score' | 'pay' | 'commute' | 'newest'
 /** How many jobs a money or commute sort ranks within. */
 export const CANDIDATES = 250
 
-const KEYS: Record<TopSort, (e: { job: Job; score: number }) => number> = {
-  score: (e) => e.score,
+const KEYS: Record<TopSort, (e: { job: Job; score: number; exact: number }) => number> = {
+  // The unrounded score. Ordering on the rounded one while displaying a
+  // percentile built from the unrounded one put a 9.8 below a 9.7 on screen.
+  score: (e) => e.exact,
   pay: (e) => topHourly(e.job.pay) ?? -1,
   // Negated so every key sorts descending and nearest still comes first.
   commute: (e) => -(commuteOf(e.job).minutes ?? 9e9),
@@ -89,7 +93,7 @@ export function topJobs(
   const ranked = jobs
     .map((job) => {
       const r = rank(job, profile, weights, ctx)
-      return { job, score: r.score, fit: r.fit, gettable: r.gettable.score }
+      return { job, score: r.score, exact: r.exact, fit: r.fit, gettable: r.gettable.score }
     })
     // Top is a recommendation, so the unwinnable have no business on it at all.
     // Score-ordering buried them; ordering by money does not, and pay and
@@ -97,10 +101,10 @@ export function topJobs(
     // money sort was a hospital's chief operating officer and four principal
     // engineers. They stay in the pool, where a search can still find them.
     .filter((r) => r.gettable > IMPOSSIBLE)
-    .sort((a, b) => b.score - a.score)
+    .sort((a, b) => b.exact - a.exact)
     // Narrow to what is reachable BEFORE re-ordering, then apply the chosen key.
     .slice(0, by === 'score' ? Infinity : CANDIDATES)
-    .sort((a, b) => key(b) - key(a) || b.score - a.score)
+    .sort((a, b) => key(b) - key(a) || b.exact - a.exact)
 
   // One entry per role, keeping the best-scoring posting of it.
   const byRole = new Map<string, TopEntry>()
@@ -113,7 +117,7 @@ export function topJobs(
 
   const out: TopEntry[] = []
   const perCompany = new Map<string, number>()
-  for (const entry of [...byRole.values()].sort((a, b) => key(b) - key(a) || b.score - a.score)) {
+  for (const entry of [...byRole.values()].sort((a, b) => key(b) - key(a) || b.exact - a.exact)) {
     const company = normaliseCompany(entry.job.company)
     const used = perCompany.get(company) ?? 0
     if (used >= perEmployer) continue

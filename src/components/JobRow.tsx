@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { Job } from '../types'
 import { commuteOf } from '../lib/commute'
+import type { Match } from '../lib/match'
 import { packFor } from '../lib/packs'
 import { boardCount } from '../lib/dedupe'
 import { formatPay } from '../lib/pay'
@@ -28,12 +29,14 @@ function snippet(job: Job, query: string): string | null {
 }
 
 export function JobRow({
-  job, profile, weights, ctx = defaultCtx(), applied, selected, expanded, deadReq, onToggleExpand, onToggleSelect, onApply, onDoc, description, query = '', showCompany = true,
+  job, profile, weights, ctx = defaultCtx(), matchOf, applied, selected, expanded, deadReq, onToggleExpand, onToggleSelect, onApply, onDoc, description, query = '', showCompany = true,
 }: {
   job: Job
   profile: Profile
   weights: Weights
   ctx?: Ctx
+  /** Where this job sits among everything in range, on a scale of ten. */
+  matchOf?: Match
   applied: boolean
   selected: boolean
   expanded: boolean
@@ -50,8 +53,9 @@ export function JobRow({
 }) {
   const [showAll, setShowAll] = useState(false)
   const [showDocs, setShowDocs] = useState(false)
-  const { axes, gettable: ease, industry, logistics, fit, score } = rank(job, profile, weights, ctx)
+  const { axes, gettable: ease, industry, logistics, fit, score, exact } = rank(job, profile, weights, ctx)
   const commute = commuteOf(job)
+  const placing = matchOf ? matchOf(exact) : score
   const gaps = gapsFor(job.requirements, profile)
   const shown = showAll ? gaps : gaps.filter((g) => g.verdict !== 'unstated').slice(0, 8)
   const boards = boardCount(job)
@@ -69,8 +73,16 @@ export function JobRow({
         />
         <button type="button" onClick={onToggleExpand} className="min-w-0 flex-1 text-left" aria-expanded={expanded}>
           <div className="flex items-baseline gap-2">
-            <span className="tabular text-sm font-semibold" style={{ color: score >= 7 ? 'var(--good)' : score >= 5 ? 'var(--ink)' : 'var(--muted)' }}>
-              {score.toFixed(1)}
+            {/*
+              The percentile, not the raw score. The score is an average of
+              eleven axes and averages cluster: over the real pool it runs 4.0
+              to 7.7 with more than half of everything between 6 and 7, so two
+              jobs a hundred places apart both read "6.8". The raw figure is
+              still shown when the row is opened, beside the axes that explain
+              it — this is the one that ranks.
+            */}
+            <span className="tabular text-sm font-semibold" style={{ color: placing >= 8 ? 'var(--good)' : placing >= 5 ? 'var(--ink)' : 'var(--muted)' }}>
+              {placing.toFixed(1)}
             </span>
             <span className="min-w-0 flex-1 truncate text-sm font-medium">{job.title}</span>
           </div>
@@ -115,6 +127,7 @@ export function JobRow({
               <span className="faint">{ease.why.join(', ') || 'nothing either way'}</span>
             </span>
             <span className="w-full text-[11px] faint">
+              {matchOf ? `better than ${(placing * 10).toFixed(0)}% of what is in range · ` : ''}
               logistics {logistics.toFixed(1)} · overall fit {fit.toFixed(1)}
               {score < fit && ` · scaled to ${score.toFixed(1)} by how winnable it is`}
             </span>

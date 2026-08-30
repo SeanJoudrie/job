@@ -326,6 +326,10 @@ check('expanding shows the scoring axes', /Container/.test(open) && /Reachable/.
 // hand-waved "domain pull" axis.
 check('including the logistics the case file leads with',
   /Pay/.test(open) && /Commute/.test(open) && /Posture/.test(open) && /Hours/.test(open) && /Industry/.test(open))
+// The big number is a placing in the pool, not the raw score — and a number
+// that ranks has to say what it means, or it is just a number.
+check('the ranking number explains what it is', /better than \d+% of what is in range/.test(open),
+  (open.match(/better than[^\n]*/) ?? ['missing'])[0].slice(0, 70))
 check('and the split between them', /logistics [\d.]+ · overall fit [\d.]+/.test(open),
   (open.match(/logistics [^\n]*/) ?? [''])[0])
 check('and the requirement verdicts', /(met|soft|hard)/.test(open))
