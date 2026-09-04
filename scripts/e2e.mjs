@@ -370,6 +370,50 @@ check('AND survives every other key being wiped', survived === 1, `${survived} e
 const appliedText = await page.locator('main').innerText()
 check('the applied view can export', /export/.test(appliedText))
 
+// --- what was captured with it ---------------------------------------------
+// The whole point of the outcome log is the snapshot taken at the moment of
+// ticking. It is written by one call in one place and nothing else would fail
+// if it silently stopped happening, so it is asserted against the stored value
+// rather than against anything on screen.
+const snapshot = await page.evaluate(() => {
+  const log = JSON.parse(localStorage.getItem('job.applied.v1') ?? '{}')
+  return Object.values(log)[0]?.ctx ?? null
+})
+check('ticking applied also records what the job was', !!snapshot,
+  snapshot ? `${snapshot.source} / tier ${snapshot.tier} / ${snapshot.variant}` : 'no snapshot')
+check('and the snapshot carries the board, the tier and the resume that went out',
+  !!snapshot && typeof snapshot.source === 'string' && /^[A-E]$/.test(snapshot.tier ?? '') && /^(full|stripped)$/.test(snapshot.variant ?? ''),
+  JSON.stringify(snapshot ?? {}).slice(0, 120))
+check('and the eleven axis scores, so the weights can be checked against outcomes',
+  Object.keys(snapshot?.axes ?? {}).length >= 8, `${Object.keys(snapshot?.axes ?? {}).length} axes`)
+
+// The referral is the one field nothing can infer, and the one that has ever
+// correlated with an interview. It has to survive a reload like the rest.
+await page.getByRole('button', { name: /mark referral/ }).first().click()
+await page.waitForTimeout(300)
+await page.reload({ waitUntil: 'networkidle' })
+await page.waitForSelector('nav')
+await page.getByRole('button', { name: /^applied/ }).click()
+await page.waitForTimeout(400)
+const referral = await page.evaluate(() => Object.values(JSON.parse(localStorage.getItem('job.applied.v1') ?? '{}'))[0]?.referral)
+check('marking a referral sticks', referral === true, String(referral))
+
+// --- outcomes ---------------------------------------------------------------
+await page.getByRole('button', { name: /^outcomes/ }).click()
+await page.waitForTimeout(400)
+const outText = await page.locator('main').innerText()
+// The headline labels are upper-cased in CSS, so innerText comes back shouting.
+check('outcomes opens and counts what has gone out', /sent/i.test(outText) && /\b1\b/.test(outText),
+  outText.split('\n').slice(0, 8).join(' / '))
+// The failure mode this page exists to avoid: one application answered is not
+// a 100% response rate, and must never be printed as one.
+check('and refuses to state a rate off a single application', !/100%/.test(outText),
+  (outText.match(/[^\n]*%[^\n]*/) ?? ['no percentage shown'])[0])
+check('it says how much more is needed before the weights can be judged', /Not yet/.test(outText),
+  (outText.match(/Not yet[^\n]*/) ?? [''])[0].slice(0, 90))
+// Nothing was entered, so nothing is claimed about the money.
+check('and shows no runway until a savings figure is entered', !/Take the job|Bridge work now|Review the strategy/.test(outText))
+
 // --- duplicates ------------------------------------------------------------
 await page.getByRole('button', { name: /^dupes/ }).click()
 await page.waitForTimeout(400)

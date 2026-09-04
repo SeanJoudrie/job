@@ -26,6 +26,15 @@ export type Settings = {
    */
   contact: Contact
   dates: Dates
+  /**
+   * Money left, and what it goes out at.
+   *
+   * `null` means never entered, and that is different from zero: nothing about
+   * the runway is shown until there is a real figure, because a runway panel
+   * counting down from a number the app invented is worse than no panel at all.
+   */
+  savings: number | null
+  monthlyBurn: number
 }
 
 export const DEFAULTS: Settings = {
@@ -42,6 +51,8 @@ export const DEFAULTS: Settings = {
     links: 'linkedin.com/in/seanjoudrie',
   },
   dates: DEFAULT_DATES,
+  savings: null,
+  monthlyBurn: 0,
 }
 
 /**

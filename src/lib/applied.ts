@@ -1,4 +1,4 @@
-import type { Applied, Job } from '../types'
+import type { Applied, AppliedCtx, AppliedStatus, Job } from '../types'
 import { normaliseCompany, normaliseTitle } from './dedupe'
 import { read, write } from './storage'
 
@@ -34,12 +34,19 @@ export function loadApplied(): AppliedLog {
   return out
 }
 
-/** Synchronous by design — a reload a second later must still know. */
-export function markApplied(job: Job, at = new Date().toISOString()): AppliedLog {
+/**
+ * Synchronous by design — a reload a second later must still know.
+ *
+ * `ctx` is what the job looked like when it was sent. It is optional so the
+ * function still works from a test or a place that has no scoring context, but
+ * every real call site passes it: without it the log can say how many were sent
+ * and nothing about which ones were worth sending.
+ */
+export function markApplied(job: Job, ctx?: AppliedCtx, at = new Date().toISOString()): AppliedLog {
   const log = loadApplied()
   const key = keyOf(job)
   if (!log[key]) {
-    log[key] = { key, title: job.title, company: job.company, url: job.url, at, status: 'applied' }
+    log[key] = { key, title: job.title, company: job.company, url: job.url, at, status: 'applied', ctx, variant: ctx?.variant }
     write(KEY, log)
   }
   return log
@@ -52,10 +59,49 @@ export function unmarkApplied(job: Job): AppliedLog {
   return log
 }
 
-export function setStatus(key: string, status: Applied['status']): AppliedLog {
+/**
+ * Move an application along, and stamp when a human first answered.
+ *
+ * `respondedAt` is set once and never moved. The interesting number is how long
+ * the first reply took, not how long the last stage change took — overwriting it
+ * at the offer stage would turn a two-day reply into a six-week one and make
+ * every board look equally slow.
+ *
+ * `ghosted` is not a response. It is what the app concludes after three weeks of
+ * silence, and marking it by hand must not stamp a reply that never came.
+ */
+export function setStatus(key: string, status: AppliedStatus, at = new Date().toISOString()): AppliedLog {
+  const log = loadApplied()
+  const e = log[key]
+  if (e) {
+    const answered = status !== 'applied' && status !== 'ghosted'
+    log[key] = { ...e, status, respondedAt: e.respondedAt ?? (answered ? at : undefined) }
+    write(KEY, log)
+  }
+  return log
+}
+
+/**
+ * The one field he has to set himself.
+ *
+ * Every interview so far has come from someone passing the resume along, and
+ * roughly six thousand portal applications have produced no offer. If that is
+ * true it is the largest effect in the whole log, and it cannot be inferred
+ * from a posting — so it is a toggle on the row.
+ */
+export function setReferral(key: string, referral: boolean): AppliedLog {
   const log = loadApplied()
   if (log[key]) {
-    log[key] = { ...log[key], status }
+    log[key] = { ...log[key], referral }
+    write(KEY, log)
+  }
+  return log
+}
+
+export function setNote(key: string, note: string): AppliedLog {
+  const log = loadApplied()
+  if (log[key]) {
+    log[key] = { ...log[key], note: note || undefined }
     write(KEY, log)
   }
   return log

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { JobRow } from './components/JobRow'
 import { Chip, Field, input } from './components/ui'
-import { isDeadReq, keyOf, loadApplied, markApplied, setStatus, unmarkApplied, withGhosting, exportApplied, type AppliedLog } from './lib/applied'
+import { isDeadReq, keyOf, loadApplied, markApplied, setNote, setReferral, setStatus, unmarkApplied, withGhosting, exportApplied, type AppliedLog } from './lib/applied'
 import { loadDescriptions, loadIndex, type Index } from './lib/data'
 import { boardCount } from './lib/dedupe'
 import { defaultLanes, describeRule, LANES_VERSION, mkRule, runNet, topBaseline, type Net, type Rule } from './lib/nets'
@@ -19,8 +19,10 @@ import { loadSettings, saveSettings, type Settings } from './lib/settings'
 import { read, write } from './lib/storage'
 import type { Job } from './types'
 import { coverLetter, scoreJob, type Verdict } from './lib/claude'
+import { OutcomesView } from './components/Outcomes'
+import { captureCtx } from './lib/outcomes'
 
-type View = 'top' | 'pool' | 'applied' | 'dupes' | 'docs' | 'settings'
+type View = 'top' | 'pool' | 'applied' | 'outcomes' | 'dupes' | 'docs' | 'settings'
 /** Which document is open over the list, if any. */
 type OpenDoc = { pack: Pack; kind: 'resume' | 'letter' }
 type Sort = 'fit' | 'commute' | 'pay' | 'newest' | 'title' | 'gettable'
@@ -170,8 +172,23 @@ export default function App() {
     return next
   }
 
+  /**
+   * Ticking the box is the only moment the app knows everything about a job at
+   * once — what it scored, where it sat in the pool, which resume the rules
+   * chose, whether a letter had been written for it. None of that survives the
+   * next scan, so it is written down here rather than reconstructed later from
+   * an index that has already moved on.
+   */
   function apply(job: Job, next: boolean) {
-    setApplied(withGhosting(next ? markApplied(job) : unmarkApplied(job)))
+    if (!next) return setApplied(withGhosting(unmarkApplied(job)))
+    const snapshot = captureCtx(job, {
+      profile: settings.profile,
+      weights: settings.weights,
+      ctx,
+      match,
+      letter: !!letters[job.id],
+    })
+    setApplied(withGhosting(markApplied(job, snapshot)))
   }
 
   async function runScoring() {
@@ -269,7 +286,7 @@ export default function App() {
           <h1 className="text-sm font-semibold">Jobs</h1>
           <span className="text-[11px] faint">{index.count} scanned · {new Date(index.generatedAt).toLocaleDateString()}</span>
           <nav className="ml-auto flex gap-2 text-xs">
-            {(['top', 'pool', 'applied', 'dupes', 'docs', 'settings'] as View[]).map((v) => (
+            {(['top', 'pool', 'applied', 'outcomes', 'dupes', 'docs', 'settings'] as View[]).map((v) => (
               <button key={v} onClick={() => setView(v)} aria-current={view === v} style={{ color: view === v ? 'var(--accent)' : 'var(--muted)' }}>
                 {v === 'dupes' ? `dupes ${dupes.length}` : v === 'applied' ? `applied ${appliedList.length}` : v}
               </button>
@@ -431,10 +448,15 @@ export default function App() {
         <AppliedView
           list={appliedList}
           onStatus={(k, s) => setApplied(withGhosting(setStatus(k, s)))}
+          onReferral={(k, v) => setApplied(withGhosting(setReferral(k, v)))}
+          onNote={(k, v) => setApplied(withGhosting(setNote(k, v)))}
           log={applied}
           letters={letters}
           jobsById={byId}
         />
+      )}
+      {view === 'outcomes' && (
+        <OutcomesView list={appliedList} savings={settings.savings} burn={settings.monthlyBurn} />
       )}
       {view === 'dupes' && <DupesView jobs={dupes} />}
       {view === 'docs' && <DocsView onOpen={(pack: Pack, kind: 'resume' | 'letter') => setDoc({ pack, kind })} />}
@@ -721,9 +743,11 @@ function DocsView({ onOpen }: { onOpen: (pack: Pack, kind: 'resume' | 'letter') 
   )
 }
 
-function AppliedView({ list, onStatus, log, letters, jobsById }: {
+function AppliedView({ list, onStatus, onReferral, onNote, log, letters, jobsById }: {
   list: import('./types').Applied[]
   onStatus: (k: string, s: import('./types').Applied['status']) => void
+  onReferral: (k: string, v: boolean) => void
+  onNote: (k: string, v: string) => void
   log: AppliedLog
   letters: Record<string, string>
   jobsById: Map<string, Job>
@@ -772,15 +796,48 @@ function AppliedView({ list, onStatus, log, letters, jobsById }: {
       </div>
       <ul>
         {list.map((e) => (
-          <li key={e.key} className="flex items-center gap-2 border-b line px-3 py-2 text-xs">
-            <span className="min-w-0 flex-1">
-              <a href={e.url} target="_blank" rel="noreferrer" className="font-medium">{e.title}</a>
-              <span className="muted"> · {e.company}</span>
-              <span className="faint"> · {new Date(e.at).toLocaleDateString()}</span>
-            </span>
-            <select value={e.status} onChange={(ev) => onStatus(e.key, ev.target.value as import('./types').Applied['status'])} className="rounded border line bg-transparent px-1 py-0.5 text-[11px]">
-              {['applied', 'replied', 'interviewing', 'offer', 'rejected', 'ghosted'].map((s) => <option key={s}>{s}</option>)}
-            </select>
+          <li key={e.key} className="border-b line px-3 py-2 text-xs">
+            <div className="flex items-center gap-2">
+              <span className="min-w-0 flex-1">
+                <a href={e.url} target="_blank" rel="noreferrer" className="font-medium">{e.title}</a>
+                <span className="muted"> · {e.company}</span>
+                <span className="faint"> · {new Date(e.at).toLocaleDateString()}</span>
+              </span>
+              <select value={e.status} onChange={(ev) => onStatus(e.key, ev.target.value as import('./types').Applied['status'])} aria-label={`Status of ${e.title}`} className="rounded border line bg-transparent px-1 py-0.5 text-[11px]">
+                {['applied', 'replied', 'interviewing', 'offer', 'rejected', 'ghosted'].map((s) => <option key={s}>{s}</option>)}
+              </select>
+            </div>
+            {/* Everything on this line was captured when the box was ticked. The
+                referral is the one thing the app cannot know and the one thing
+                that has ever correlated with an interview, so it sits first. */}
+            <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px]">
+              <button
+                onClick={() => onReferral(e.key, !e.referral)}
+                className="chip"
+                aria-pressed={!!e.referral}
+                style={e.referral ? { color: 'var(--good)', borderColor: 'var(--good)' } : undefined}
+              >
+                {e.referral ? 'referral' : 'cold — mark referral'}
+              </button>
+              {e.ctx && (
+                <span className="faint tabular">
+                  {e.ctx.source} · tier {e.ctx.tier} · {e.ctx.variant} resume{e.ctx.letter ? ' + letter' : ''}
+                  {e.ctx.hourly !== null && ` · $${e.ctx.hourly}/hr`}
+                  {e.ctx.minutes !== null && ` · ${e.ctx.minutes}m`}
+                  {' · '}match {e.ctx.match.toFixed(1)}
+                </span>
+              )}
+              {e.respondedAt && (
+                <span className="faint">answered in {Math.max(0, Math.round((Date.parse(e.respondedAt) - Date.parse(e.at)) / 86_400_000))}d</span>
+              )}
+            </div>
+            <input
+              defaultValue={e.note ?? ''}
+              onBlur={(ev) => ev.target.value !== (e.note ?? '') && onNote(e.key, ev.target.value)}
+              placeholder="note — who you spoke to, what they said"
+              aria-label={`Note on ${e.title}`}
+              className="mt-1 w-full rounded border line bg-transparent px-2 py-1 text-[11px]"
+            />
           </li>
         ))}
       </ul>
@@ -825,6 +882,26 @@ function SettingsView({ settings, onChange, onResetLanes }: { settings: Settings
           </select>
         </Field>
       </div>
+      <div>
+        {/* Left blank until he enters something. The runway panel on Outcomes
+            stays hidden entirely rather than counting down from a guess. */}
+        <p className="mb-1 text-[11px] uppercase tracking-wide faint">Runway — leave blank to hide it</p>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Savings ($)" hint="Review at 20k, bridge work at 15k, take the job at 10k.">
+            <input
+              type="number"
+              value={settings.savings ?? ''}
+              onChange={(e) => set('savings', e.target.value === '' ? null : Number(e.target.value))}
+              className={input}
+              placeholder="not set"
+            />
+          </Field>
+          <Field label="Monthly burn ($)">
+            <input type="number" value={settings.monthlyBurn || ''} onChange={(e) => set('monthlyBurn', Number(e.target.value))} className={input} placeholder="not set" />
+          </Field>
+        </div>
+      </div>
+
       <div>
         <p className="mb-1 text-[11px] uppercase tracking-wide faint">
           Your details — they appear on every resume and letter
