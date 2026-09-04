@@ -90,3 +90,41 @@ export function gradeRequirement(grade: number | null): Requirement | null {
     years,
   }
 }
+
+/**
+ * Roughly what each grade tops out at, Boston locality, including step 10.
+ *
+ * Approximate on purpose — this is a contradiction check, not a pay table, and
+ * it is only ever asked whether a number is wildly out of range.
+ */
+const CEILING: Record<number, number> = {
+  1: 32_000, 2: 36_000, 3: 40_000, 4: 45_000, 5: 50_000, 6: 56_000, 7: 62_000,
+  8: 69_000, 9: 76_000, 10: 84_000, 11: 92_000, 12: 110_000, 13: 131_000,
+  14: 155_000, 15: 195_000,
+}
+
+/**
+ * Does the grade agree with the money?
+ *
+ * A guard against being confidently wrong, added after being confidently wrong.
+ * An IRS "Supervisory Program Analyst, $125,776–$197,200" was read as GS-4 —
+ * the number was real, but it was an IR band, a scale on which 4 means senior
+ * rather than entry. Written down as a GS grade it made a job he cannot have
+ * look like the fourth best thing available.
+ *
+ * The pay plan is now checked at the source, so that particular route is
+ * closed. This stays because it closes the whole class: a description quoting
+ * "GS-5" in a sentence about something else, a series number that survives the
+ * regex, a plan this does not know about yet. Grade and salary come from
+ * different fields, so when they disagree by this much one of them is wrong,
+ * and the safe move is to say nothing rather than guess which.
+ *
+ * The margin is deliberately loose — 60% above the top step — because locality
+ * pay, special salary rates and supervisory differentials are all real. It is
+ * meant to catch a scale error, not a rounding one.
+ */
+export function gradeAgreesWithPay(grade: number, annualMax: number | null): boolean {
+  if (annualMax === null || !Number.isFinite(annualMax) || annualMax <= 0) return true
+  const ceiling = CEILING[grade]
+  return ceiling === undefined ? true : annualMax <= ceiling * 1.6
+}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { REACHABLE_GRADE, gradeRequirement, parseGsGrade } from '../gsgrade'
+import { REACHABLE_GRADE, gradeAgreesWithPay, gradeRequirement, parseGsGrade } from '../gsgrade'
 import { countGaps, gapsFor } from '../requirements'
 
 const PROFILE = { years: 5, degree: 'bachelor' as const, clearance: 'none' as const }
@@ -61,5 +61,34 @@ describe('what a grade means for him', () => {
 
   it('emits nothing at all for a job that is not on the schedule', () => {
     expect(gradeRequirement(null)).toBeNull()
+  })
+})
+
+/**
+ * The federal government does not run one pay scale, and this was written down
+ * after getting that wrong in production. An IRS "Supervisory Program Analyst,
+ * $125,776–$197,200" is an IR band — a scale on which 04 means senior. Stamped
+ * "GS-4" it read as an entry-grade clerk and sat at number four in the list.
+ */
+describe('a grade has to agree with the money', () => {
+  it('accepts a grade that matches its own pay band', () => {
+    expect(gradeAgreesWithPay(4, 45_000)).toBe(true)
+    expect(gradeAgreesWithPay(13, 140_000)).toBe(true)
+    expect(gradeAgreesWithPay(15, 197_000)).toBe(true)
+  })
+
+  it('rejects the one that started this', () => {
+    expect(gradeAgreesWithPay(4, 197_200)).toBe(false)
+  })
+
+  it('leaves room for locality pay and supervisory differentials', () => {
+    // A GS-9 topping out near $76k should survive a Boston locality bump
+    // rather than being thrown away for being slightly over the table.
+    expect(gradeAgreesWithPay(9, 95_000)).toBe(true)
+  })
+
+  it('says nothing either way when the posting states no salary', () => {
+    expect(gradeAgreesWithPay(14, null)).toBe(true)
+    expect(gradeAgreesWithPay(14, 0)).toBe(true)
   })
 })

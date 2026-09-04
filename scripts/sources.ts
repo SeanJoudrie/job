@@ -466,6 +466,8 @@ export type UsaJobsItem = {
     PositionTitle?: string; PositionURI?: string; ApplyURI?: string[]
     OrganizationName?: string; DepartmentName?: string
     PositionLocation?: { LocationName?: string }[]
+    /** The pay plan: "GS", but also "IR", "FV", "WG", "ES", "NH" and others. */
+    JobGrade?: { Code?: string }[]
     QualificationSummary?: string
     PublicationStartDate?: string
     PositionRemuneration?: { MinimumRange?: string; MaximumRange?: string; RateIntervalCode?: string }[]
@@ -497,15 +499,25 @@ export function mapUsaJobs(items: UsaJobsItem[]): Raw[] {
     const paths = details?.HiringPathDisplay ?? []
     const clearance = details?.SecurityClearance ?? ''
     /*
-     * The grade, from the field rather than the prose.
+     * The grade, from the field rather than the prose — and only when the
+     * posting is actually on the General Schedule.
      *
-     * It is the hardest requirement on a federal posting — an HR specialist
-     * applies it before a human reads anything — and the only one nothing here
-     * could see. The full description repeats it in 42% of postings; this field
-     * carries it on all of them. The high end is taken because a ladder posting
-     * fills at the top far more often than the bottom.
+     * The first version of this took the number and stamped "GS-" on it. The
+     * federal government does not run one pay scale: the IRS uses IR bands, the
+     * FAA uses FV, trades use WG, the SES uses ES. An IRS "Supervisory Program
+     * Analyst, $125,776–$197,200" came back as IR-04, was written down as GS-4,
+     * and sat at number four in the whole list — read as an entry-grade clerk
+     * because of a number that meant the opposite on its own scale.
+     *
+     * So the plan is checked and anything that is not GS says nothing at all. A
+     * silent job is scored on everything else; a wrongly graded one is scored
+     * on a lie, and in the optimistic direction, which is the error this
+     * classifier exists to prevent.
      */
-    const grade = Math.max(Number(details?.HighGrade ?? 0), Number(details?.LowGrade ?? 0)) || null
+    const plan = (d.JobGrade ?? []).map((g) => (g.Code ?? '').toUpperCase())
+    const onGeneralSchedule = plan.includes('GS')
+    const number = Math.max(Number(details?.HighGrade ?? 0), Number(details?.LowGrade ?? 0)) || null
+    const grade = onGeneralSchedule ? number : null
     const extras = [
       grade && grade >= 1 && grade <= 15 ? `Advertised at GS-${grade}.` : '',
       paths.length ? `Hiring paths: ${paths.join(', ')}.` : '',

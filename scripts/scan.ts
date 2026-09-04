@@ -5,7 +5,7 @@ import { industryOf } from '../src/lib/industry'
 import { HOME, isRemote, nearestMiles, parseLocations } from '../src/lib/location'
 import { formatPay, parsePay, toAnnual } from '../src/lib/pay'
 import { countGaps, gapsFor, parseRequirements } from '../src/lib/requirements'
-import { gradeRequirement, parseGsGrade } from '../src/lib/gsgrade'
+import { gradeAgreesWithPay, gradeRequirement, parseGsGrade } from '../src/lib/gsgrade'
 import { tuitionEmployers } from '../src/lib/perks'
 import { classifyFamilies } from '../src/lib/roles'
 import type { Job } from '../src/types'
@@ -100,7 +100,12 @@ function enrich(raw: Raw): Job | null {
   if (!remote && (miles === null || miles > MAX_MILES)) return null
 
   const pay = parsePay(raw.payHint) ?? parsePay(raw.descText)
-  const gsGrade = raw.source === 'usajobs' ? parseGsGrade(`${raw.title} ${raw.descText}`) : null
+  // Discarded when it disagrees with the salary — see gradeAgreesWithPay. Grade
+  // and pay arrive in different fields, so a wide disagreement means one of
+  // them is wrong and there is no way to tell which.
+  const claimed = raw.source === 'usajobs' ? parseGsGrade(`${raw.title} ${raw.descText}`) : null
+  const topPay = pay ? toAnnual(pay.max ?? pay.min ?? 0, pay.period) : null
+  const gsGrade = claimed !== null && gradeAgreesWithPay(claimed, topPay) ? claimed : null
   return {
     id: raw.id,
     source: raw.source,
