@@ -102,7 +102,27 @@ function resolveOne(raw: string, home: Point): Loc {
     }
   }
 
-  const city = stateAt > 0 ? tokens[stateAt - 1] : undefined
+  /**
+   * The city is normally the token before the state — "Woburn, MA".
+   *
+   * Large Workday tenants write it the other way round. RTX posts
+   * "US-MA-WOBURN-WB2 ~ 225 Presidential Way", which becomes US, MA, WOBURN,
+   * WB2 once the hyphens are split; US is dropped as noise, so the state is
+   * first and the city sits AFTER it. Every one of those resolved to the
+   * Massachusetts centroid instead — 29.4 miles for a Woburn job that is nine,
+   * and for a Pittsfield job that is a hundred and twenty. Under a 30-minute
+   * limit that silently deletes the whole employer, which is how it would have
+   * shipped: 61 postings added and none of them ever visible.
+   *
+   * The token after the state is only accepted if the gazetteer knows it as a
+   * city in that state. Without that guard "US-MA-TEWKSBURY-322" would offer
+   * 322 as a city, and "Massachusetts, United States" would offer anything at
+   * all. A name that does not resolve is left alone rather than guessed at.
+   */
+  const before = stateAt > 0 ? tokens[stateAt - 1] : undefined
+  const after = stateAt >= 0 ? tokens[stateAt + 1] : undefined
+  const known = (name: string | undefined) => (name && state && CITIES[`${name.toLowerCase()}|${state}`] ? name : undefined)
+  const city = known(before) ?? known(after) ?? before
   const loc: Loc = { raw, remote, hybrid, ...(city && { city }), ...(state && { state }) }
 
   const point = city && state ? CITIES[`${city.toLowerCase()}|${state}`] : undefined

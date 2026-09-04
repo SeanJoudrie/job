@@ -23,7 +23,19 @@ export type Board =
   | ({ ats: 'workable' } & Common)
   | ({ ats: 'silkroad' } & Common)
   | ({ ats: 'smartrecruiters' } & Common)
-  | ({ ats: 'workday'; wd: number; site: string } & Common)
+  /**
+   * `search` narrows a national board server-side.
+   *
+   * RTX posts 4,525 jobs and Leidos 2,000, almost none of them in range, and
+   * the location filter only runs after every page has been pulled — a hundred
+   * requests each to keep forty. Workday's own searchText cuts RTX to 61 and
+   * Leidos to 39 in one call. The cost is that it matches text as well as
+   * place, so a posting whose location field says "3 Locations" is missed even
+   * when one of the three is here. That trade is worth it for an employer
+   * whose board is national; it would be wrong for a local one, which is why
+   * it is opt-in per board rather than applied to all of them.
+   */
+  | ({ ats: 'workday'; wd: number; site: string; search?: string } & Common)
 
 export const BOARDS: Board[] = [
   // Defence tech — service is an asset, and most sponsor a clearance rather
@@ -35,6 +47,11 @@ export const BOARDS: Board[] = [
   { ats: 'greenhouse', token: 'scaleai', name: 'Scale AI', sector: 'defense' },
   { ats: 'ashby', token: 'primer', name: 'Primer', sector: 'defense' },
   { ats: 'workday', token: 'draper', wd: 5, site: 'Draper_Careers', name: 'Draper', sector: 'defense' },
+  // The primes. National boards, narrowed to the state before they are pulled.
+  // Their Massachusetts sites are the ones in range: Woburn, Cambridge,
+  // Andover and Tewksbury for RTX, Bedford for Leidos.
+  { ats: 'workday', token: 'globalhr', wd: 5, site: 'REC_RTX_Ext_Gateway', search: 'Massachusetts', name: 'RTX', sector: 'defense' },
+  { ats: 'workday', token: 'leidos', wd: 5, site: 'External', search: 'Massachusetts', name: 'Leidos', sector: 'defense' },
 
   // Higher education — student affairs, admissions, campus operations. Done
   // before and enjoyed, and the closest structural fit on the whole list.

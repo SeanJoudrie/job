@@ -186,7 +186,7 @@ async function fetchWorkday(board: Extract<Board, { ats: 'workday' }>, keep: Kee
     const res = await fetch(`${api}/jobs`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', accept: 'application/json' },
-      body: JSON.stringify({ appliedFacets: {}, limit: 20, offset, searchText: '' }),
+      body: JSON.stringify({ appliedFacets: {}, limit: 20, offset, searchText: board.search ?? '' }),
       signal: AbortSignal.timeout(45000),
     })
     if (!res.ok) break

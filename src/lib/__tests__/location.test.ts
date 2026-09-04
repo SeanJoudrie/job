@@ -85,3 +85,51 @@ describe('remote detection', () => {
   })
   it('an onsite posting', () => expect(isRemote(at('Boston, MA'))).toBe(false))
 })
+
+
+/**
+ * The Workday location code, which reads backwards.
+ *
+ * RTX writes "US-MA-WOBURN-WB2 ~ 225 Presidential Way". Split on the hyphens
+ * and US falls out as noise, leaving the state ahead of the city rather than
+ * behind it — so every posting resolved to the Massachusetts centroid at 29.4
+ * miles. Woburn is nine minutes away and Pittsfield is two hours; both read the
+ * same, and under a 30-minute limit both were deleted.
+ */
+describe('a state written before its city', () => {
+  it('reads the city that follows the state', () => {
+    const [loc] = parseLocations('US-MA-WOBURN-WB2 ~ 225 Presidential Way ~ GODDARD BLDG')
+    expect(loc.state).toBe('MA')
+    expect(loc.city?.toLowerCase()).toBe('woburn')
+    expect(loc.miles).toBeLessThan(10)
+  })
+
+  it('separates two of them that used to read identically', () => {
+    const woburn = parseLocations('US-MA-WOBURN-WB2')[0].miles!
+    const pittsfield = parseLocations('US-MA-PITTSFIELD-1')[0].miles!
+    expect(pittsfield).toBeGreaterThan(woburn + 50)
+  })
+
+  it('refuses a building number as a city', () => {
+    const [loc] = parseLocations('US-MA-TEWKSBURY-322')
+    expect(loc.city?.toLowerCase()).toBe('tewksbury')
+    // A code whose city segment is not a place falls back to the state, which
+    // is honest — it does not invent a point for "9999".
+    const [none] = parseLocations('US-MA-9999-1')
+    const [bare] = parseLocations('Massachusetts')
+    expect(none.state).toBe('MA')
+    expect(none.miles).toBe(bare.miles)
+  })
+
+  it('still prefers the city in front when there is one', () => {
+    // "Bedford, MA, Boston" must resolve to Bedford, not to the trailing token.
+    const [loc] = parseLocations('Bedford, MA, Boston')
+    expect(loc.city).toBe('Bedford')
+  })
+
+  it('leaves an ordinary posting exactly as it was', () => {
+    const [loc] = parseLocations('Boston, MA')
+    expect(loc.city).toBe('Boston')
+    expect(loc.state).toBe('MA')
+  })
+})
