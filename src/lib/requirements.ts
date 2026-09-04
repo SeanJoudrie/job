@@ -189,6 +189,35 @@ export function parseRequirements(description: string): Requirement[] {
   return out
 }
 
+/**
+ * Cards you can hold by next Friday.
+ *
+ * First aid, CPR, AED, OSHA 10, ServSafe, a forklift ticket — a posting listing
+ * these reads as a wall and is the softest thing on the page. Every one is a
+ * weekend course, most cost under two hundred dollars, and employers who ask
+ * for them usually run the class themselves. Left unclassified they came back
+ * "not something the profile can answer", which is the same as silence, and
+ * silence on a line like this is what makes someone skip the posting.
+ *
+ * A CDL is deliberately excluded: weeks of training, a road test and a medical
+ * card is not a weekend, and calling it one would be the exact optimism this
+ * classifier exists to prevent. A state professional licence is excluded for
+ * the same reason and is already handled as an outright exclusion elsewhere.
+ */
+const QUICK_CERT =
+  /\b(?:first[- ]aid|cpr|aed|bls\b|basic life support|osha\s?(?:10|30)|servsafe|food (?:handler|safety) (?:card|certificat)|forklift|powered industrial truck|allergen|tips certif|crowd manager|flagger)\b/i
+
+/**
+ * He holds one, and it is on the resume. A commercial licence is not the same.
+ *
+ * Both apostrophes are accepted. `normaliseTypography` straightens the curly
+ * one during a scan, but a pasted posting does not go through it, and a
+ * requirement line that fails to match because of a smart quote is a silent
+ * wrong answer rather than a visible one.
+ */
+const PLAIN_LICENCE = /\b(?:valid\s+)?drivers?['\u2019]?s?\s+licen[cs]e\b/i
+const COMMERCIAL = /\b(?:cdl|commercial driver|class [ab]\b|hazmat|passenger endorsement)\b/i
+
 export type Profile = {
   years: number
   degree: Degree
@@ -226,6 +255,14 @@ export function gapsFor(reqs: Requirement[], profile: Profile): Gap[] {
       if (profile.clearance === 'active') return { requirement: r, verdict: 'matched', why: 'holds an active clearance' }
       return gap('wants a clearance already held; yours is pending')
     }
+    // Before the fall-through, because these are the openings most likely to
+    // be misread as closed. Stated hardness is overridden on purpose: "First
+    // Aid/CPR required" means required by day one, not required to apply.
+    if (QUICK_CERT.test(r.text) && !COMMERCIAL.test(r.text))
+      return { requirement: r, verdict: 'soft-gap', why: 'a weekend course, and usually run by the employer' }
+    if (PLAIN_LICENCE.test(r.text) && !COMMERCIAL.test(r.text))
+      return { requirement: r, verdict: 'matched', why: 'holds one, with a clean record' }
+
     return { requirement: r, verdict: 'unstated', why: 'not something the profile can answer' }
   })
 }

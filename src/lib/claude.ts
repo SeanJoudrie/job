@@ -27,17 +27,19 @@ Verified and resume-supported:
   leader over a 58-soldier platoon within a 220-person company. Unit SHARP
   representative and barracks operations representative: compliance, records,
   reporting.
-- BA Psychology, SNHU, 3.7 GPA, President's List 2021-2023, Order of Omega,
-  Business Analytics minor. SGA Head Senator on Budget & Finance; Phi Delta
-  Theta VP; Math Club VP.
+- BA Psychology, SNHU, 3.7 GPA, President's List 2021-2023, Order of Omega.
+  SGA Head Senator on Budget & Finance; Phi Delta Theta VP; Math Club VP.
+  There is NO minor. An earlier version of this brief claimed a Business
+  Analytics minor; the resume does not carry one, and a letter naming a
+  credential the resume cannot support is the failure rule 1 exists to stop.
 - SNHU Office of Student Involvement, operations supervisor — direct higher
   education administration experience.
 - Certificates: Yale (Financial Markets with Honors, Connected Leadership,
   Narrative Economics, American Contract Law, Global Financial Crisis), IBM
   (Project Management, Data Analytics), Google (Digital Marketing).
-- Software, self-taught with AI-assisted tools: four shipped applications.
-  Not traditional language fluency. Strongest as the most technically capable
-  person in a non-technology building.
+- Software, self-taught with AI-assisted tools: 8 products and 12 standalone
+  builds shipped since May 2026. Not traditional language fluency. Strongest as
+  the most technically capable person in a non-technology building.
 
 Worth surfacing, harder to evidence:
 - Enters new environments and becomes useful inside a week — ten homes, three
@@ -52,6 +54,10 @@ Facts a letter may state:
 - One drill weekend a month plus annual training. Drill dates are known well in
   advance but do not fall on a fixed recurring calendar date. USERRA applies.
 - Spotless driving record, reliable personal vehicle, immediately available.
+  Clean background and clean record — say so where a posting screens on it.
+- First aid, CPR, OSHA 10, ServSafe, a forklift ticket and the like are a
+  weekend, not a qualification. Where a posting asks for one, say plainly that
+  it will be held before the start date. Never imply he holds one now.
 - Thrives with recurring in-person contact, the same people, a defined
   schedule. Degrades in isolation. Not commission sales.
 `.trim()
