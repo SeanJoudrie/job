@@ -201,6 +201,10 @@ export function axesFor(job: Job, profile: Profile, ctx: Ctx = defaultCtx()): Ax
   const serviceWhy: string[] = []
   let service = 5
   if (job.sector === 'gov') { service += 3; serviceWhy.push('federal — preference is scored') }
+  // Massachusetts gives veterans statutory preference in municipal civil
+  // service too. Scored below federal because it reaches civil-service posts
+  // rather than every municipal job, and this cannot tell which is which.
+  else if (job.sector === 'municipal') { service += 2; serviceWhy.push('municipal — state veterans’ preference') }
   else if (job.sector === 'defense') { service += 1; serviceWhy.push('defence-adjacent') }
   else if (job.sector === 'university' || job.sector === 'health') { service += 1; serviceWhy.push('large employer, used to reserve duty') }
   if (job.requirements.some((r) => r.kind === 'clearance' && r.clearance === 'obtainable')) { service += 3; serviceWhy.push('sponsors a clearance') }

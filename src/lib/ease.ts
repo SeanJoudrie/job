@@ -23,7 +23,12 @@ const SECTOR_EASE: Record<Job['sector'], number> = {
   university: 1,
   health: 1,
   nonprofit: 1,
+  // Federal hiring is slow and formal — a USAJOBS posting is months of process
+  // — but it is at least a published, rule-bound one he can actually complete.
   gov: 0,
+  // A town does not run a hiring committee or a take-home. Small postings,
+  // a short list, and often a single interview with the department head.
+  municipal: 1,
 }
 
 const FAST = /\b(?:hiring immediately|immediate (?:opening|start|hire)|urgently hiring|start (?:immediately|this week)|apply today|walk[- ]in|same[- ]day|on[- ]the[- ]spot|no experience (?:necessary|required)|will train|we will train|training provided|entry[- ]level|multiple openings|several positions|now hiring)\b/i

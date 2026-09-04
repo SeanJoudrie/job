@@ -8,7 +8,7 @@ import { countGaps, gapsFor, parseRequirements } from '../src/lib/requirements'
 import { tuitionEmployers } from '../src/lib/perks'
 import { classifyFamilies } from '../src/lib/roles'
 import type { Job } from '../src/types'
-import { fetchBoard, fetchUsaJobs, type Raw } from './sources'
+import { fetchBoard, fetchMblc, fetchUsaJobs, type Raw } from './sources'
 
 /**
  * The nightly scan.
@@ -185,6 +185,16 @@ async function main() {
     } catch (err) {
       console.log(`  ${board.name.padEnd(20)}     ! ${(err as Error).message}`)
     }
+  }
+
+  // Every public, academic and special library in the state. The pool carried
+  // eight library, museum and archives postings before this.
+  try {
+    const libraries = await fetchMblc((loc) => inRange(loc))
+    raws.push(...libraries)
+    console.log(`  ${'MBLC libraries'.padEnd(20)} ${String(libraries.length).padStart(5)} postings`)
+  } catch (err) {
+    console.log(`  ${'MBLC libraries'.padEnd(20)}     ! ${(err as Error).message}`)
   }
 
   // Federal, where veteran preference is scored rather than decorative.

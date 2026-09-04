@@ -553,3 +553,180 @@ export async function fetchUsaJobs(locationName: string, radiusMiles: number): P
 }
 
 export type { Raw }
+
+/**
+ * The Massachusetts Board of Library Commissioners job board.
+ *
+ * Every public library in the state posts here, plus the academic and special
+ * libraries, and it is the answer to a measured gap: the whole pool carried
+ * eight library, museum and archives postings, in a category the case file puts
+ * near the top of the list.
+ *
+ * It is a PHP table, which is better than it sounds — it is server-rendered,
+ * and it hands over structured columns that no ATS bothers with: the
+ * institution, the town, the library type, whether it is full or part time, and
+ * the education level the employer itself has classified the job at. The detail
+ * page states the salary under its own heading rather than buried in prose.
+ *
+ * That education column is the reason this is worth doing carefully rather than
+ * quickly. Half of these want an MLS, which is a two-year degree he does not
+ * have — and the other half are library assistants, circulation staff and
+ * technicians who want a high school diploma. Read as one undifferentiated
+ * "library jobs" feed it would be half noise. Parsed, the requirement flows
+ * into the same degree machinery every other board uses, so the assistant roles
+ * rank and the librarian roles fall where they belong.
+ */
+
+const MBLC_BASE = 'https://mblc.state.ma.us/jobs/find_jobs'
+
+/** Map the board's own library-type column onto an employer kind. */
+export function mblcSector(libraryType: string): Job['sector'] {
+  const t = libraryType.toLowerCase()
+  if (t.includes('academic')) return 'university'
+  if (t.includes('special') || t.includes('corporate')) return 'nonprofit'
+  // Public and school libraries are municipal. Never `gov` — that means federal
+  // here, and it would both misclassify the employer and hand the job the
+  // federal veterans' preference bonus it has not earned.
+  return 'municipal'
+}
+
+/**
+ * The town column carries a bare name — "Northbridge", "Webster" — because the
+ * board is the Massachusetts one and the state goes without saying. It does not
+ * go without saying to a gazetteer: a name with no state resolves to nothing,
+ * and the scan drops anything it cannot place. Every one of these would have
+ * been fetched, parsed, scored and then silently thrown away.
+ *
+ * Out-of-state postings name their state — "Narragansett, RI", "Manchester, NH"
+ * — so they are left exactly as they are and the radius filter handles them.
+ */
+export function mblcPlace(town: string): string {
+  const t = town.trim()
+  if (!t) return ''
+  return /,\s*[A-Z]{2}\b/.test(t) ? t : `${t}, MA`
+}
+
+export type MblcRow = {
+  id: string
+  title: string
+  town: string
+  institution: string
+  libraryType: string
+  posted: string
+  jobType: string
+  education: string
+}
+
+/**
+ * Pull the rows out of the results table.
+ *
+ * Matched on the `data-title` attributes rather than on column position. The
+ * table ships with two columns marked `never` — hidden at every width — so
+ * counting `<td>`s means silently reading the wrong field the day a column is
+ * shown or hidden. The attribute is the column's own name and moves with it.
+ */
+export function parseMblcRows(html: string): MblcRow[] {
+  const out: MblcRow[] = []
+  for (const row of html.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/g)) {
+    const cells = new Map<string, string>()
+    for (const cell of row[1].matchAll(/<td[^>]*data-title="([^"]+)"[^>]*>([\s\S]*?)<\/td>/g)) {
+      cells.set(cell[1].toLowerCase(), decodeEntities(cell[2].replace(/<[^>]*>/g, '').trim()))
+    }
+    const id = row[1].match(/display_jobs\.php\?job_id=(\d+)/)?.[1]
+    // Posted by hand by a librarian, so titles arrive with stray leading
+    // punctuation — ": Archives and Records Management Assistant" is live on
+    // the board right now, and it reads as a bug on the row.
+    const title = cells.get('title')?.replace(/^[\s:;,–—-]+/, '').trim()
+    if (!id || !title) continue
+    out.push({
+      id,
+      title,
+      town: cells.get('city/town') ?? '',
+      institution: cells.get('institution') ?? '',
+      libraryType: cells.get('library type') ?? '',
+      posted: cells.get('date posted') ?? '',
+      jobType: cells.get('job type') ?? '',
+      education: cells.get('education') ?? '',
+    })
+  }
+  return out
+}
+
+/**
+ * The salary, from its own heading.
+ *
+ * "$21.00 / hour" sits under an `<h4>Salary</h4>` with no prose around it, so
+ * this is the rare board where the number needs no guessing. Returned as raw
+ * text for parsePay to read, including the unit, because the unit is the thing
+ * that is usually missing and here it is not.
+ */
+export function mblcSalary(html: string): string {
+  const at = html.search(/<h4[^>]*>\s*Salary\s*<\/h4>/i)
+  if (at < 0) return ''
+  const after = html.slice(at, at + 600).replace(/<h4[^>]*>\s*Salary\s*<\/h4>/i, '')
+  const upToNext = after.split(/<h4/i)[0]
+  return htmlToText(upToNext).replace(/\s+/g, ' ').trim().slice(0, 120)
+}
+
+/** "09/04/26" — two-digit year, and this century. */
+export function mblcDate(posted: string): string | null {
+  const m = posted.match(/^(\d{2})\/(\d{2})\/(\d{2})$/)
+  return m ? `20${m[3]}-${m[1]}-${m[2]}` : null
+}
+
+export async function fetchMblc(keep: Keep = () => true): Promise<Raw[]> {
+  const UA = { 'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/125 Safari/537.36' }
+  const text = async (url: string) => {
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        const res = await fetch(url, { headers: UA, signal: AbortSignal.timeout(25000) })
+        if (res.ok) return await res.text()
+        if (res.status === 404 || res.status === 410) return ''
+        throw new Error(String(res.status))
+      } catch {
+        if (attempt === 3) return ''
+        await new Promise((r) => setTimeout(r, 400 * 2 ** attempt))
+      }
+    }
+    return ''
+  }
+
+  const rows = parseMblcRows(await text(`${MBLC_BASE}/`))
+  // The board is regional and carries Rhode Island and New Hampshire postings.
+  // Filtered on the town before any detail page is fetched, same as everywhere.
+  const near = rows.filter((r) => keep(mblcPlace(r.town)))
+
+  const out: Raw[] = []
+  let cursor = 0
+  const worker = async () => {
+    while (cursor < near.length) {
+      const row = near[cursor++]
+      const url = `${MBLC_BASE}/display_jobs.php?job_id=${row.id}`
+      const page = await text(url)
+      if (!page) continue
+      // The education level is the employer's own classification and the single
+      // most useful line on the page, so it is stated in words the requirement
+      // parser already understands rather than left as a table cell it will
+      // never see.
+      const body = [
+        htmlToText(page.slice(page.indexOf('<h4'), page.length)).replace(/\s+/g, ' ').trim(),
+        row.education ? `\nRequirements: ${row.education} required.` : '',
+        row.jobType ? `\n${row.jobType} position.` : '',
+      ].join('')
+      out.push({
+        id: `mblc:${row.id}`,
+        source: 'mblc' as Source,
+        company: row.institution || 'Massachusetts library',
+        sector: mblcSector(row.libraryType),
+        title: row.title,
+        url,
+        descText: body,
+        locationRaw: mblcPlace(row.town),
+        payHint: mblcSalary(page),
+        postedAt: mblcDate(row.posted),
+      })
+    }
+  }
+  await Promise.all(Array.from({ length: 4 }, worker))
+  return out.filter((r) => r.title)
+}

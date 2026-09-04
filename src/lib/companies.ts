@@ -6,7 +6,19 @@
  * defence-tech company and a university administration office can post the same
  * title and run completely different hiring processes.
  */
-export type Sector = 'defense' | 'tech' | 'university' | 'health' | 'nonprofit' | 'gov'
+/**
+ * `gov` means federal. Municipal and state employers are their own kind.
+ *
+ * The split was forced by a real misclassification. While USAJOBS was the only
+ * government source, "sector is gov" and "this is a federal agency" were the
+ * same statement, so the industry table read one off the other. The state
+ * library board then started supplying town libraries under the same sector,
+ * and "Assistant Administrator, Fall River Public Library" came back as a
+ * federal agency — and picked up the +3 the service axis gives for federal
+ * veterans' preference, with the reason printed on the row as "federal —
+ * preference is scored". Both wrong, and both invisible without reading the row.
+ */
+export type Sector = 'defense' | 'tech' | 'university' | 'health' | 'nonprofit' | 'gov' | 'municipal'
 
 /** Split per ATS rather than lumped, so `Extract<Board, { ats: 'workable' }>` resolves. */
 /**
