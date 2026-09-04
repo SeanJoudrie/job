@@ -292,12 +292,19 @@ export default function App() {
         <div className="flex items-center gap-2 border-b line px-3 py-1.5">
           <WeekBar week={network.week} due={network.due} onClick={() => setView('people')} />
         </div>
-        <div className="flex items-center gap-2 px-3 pt-2">
+        <div className="flex items-baseline gap-2 px-3 pt-2">
           <h1 className="text-sm font-semibold">Jobs</h1>
           <span className="text-[11px] faint">{index.count} scanned · {new Date(index.generatedAt).toLocaleDateString()}</span>
-          <nav className="ml-auto flex gap-2 text-xs">
+        </div>
+        {/* Its own full-width line, wrapping.
+            Eight tabs did not fit beside the title on a 390px phone: the counts
+            wrapped mid-word and Settings was clipped off the right edge with
+            nothing to say it was there. A row that scrolls would have hidden it
+            just as completely. */}
+        <div className="px-3 pt-1">
+          <nav className="flex flex-wrap gap-x-3 gap-y-1 text-xs">
             {(['top', 'pool', 'applied', 'people', 'outcomes', 'dupes', 'docs', 'settings'] as View[]).map((v) => (
-              <button key={v} onClick={() => setView(v)} aria-current={view === v} style={{ color: view === v ? 'var(--accent)' : 'var(--muted)' }}>
+              <button key={v} onClick={() => setView(v)} aria-current={view === v} className="whitespace-nowrap" style={{ color: view === v ? 'var(--accent)' : 'var(--muted)' }}>
                 {v === 'dupes' ? `dupes ${dupes.length}` : v === 'applied' ? `applied ${appliedList.length}` : v}
               </button>
             ))}
