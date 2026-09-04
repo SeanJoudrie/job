@@ -448,11 +448,24 @@ const TIERS: Def[] = [
     title: /\b(?:software (?:engineer|developer)|full[- ]?stack|back[- ]?end|front[- ]?end|web developer|programmer|application developer)\b/i,
   },
   {
+    /**
+     * Kept, and moved down.
+     *
+     * The first case file said to apply to these anyway — entry-level and
+     * support-tier only. The second calls IT a career track to stay out of.
+     * Both were his, and he settled it: they stay in the pool and stop
+     * competing at the top. A fallback, not a target.
+     *
+     * 4.5 rather than 7. Measured on the pool at the time: eight postings
+     * classify here and one of them sat at #69 of 2,902. It does not now, and
+     * it is still one lane tap away. Below the tech-employer ceiling of 5.5, so
+     * that rule no longer binds on these — the demotion is doing the work.
+     */
     id: 'it_helpdesk_support',
     label: 'IT support & helpdesk',
-    weight: 7,
+    weight: 4.5,
     title:
-      /\b(?:help ?desk|it support|desktop support|technical support|service desk|it (?:technician|specialist|analyst|associate)|systems? (?:administrator|technician)|field service (?:technician|engineer)|end user (?:support|computing)|tier [12] support)\b/i,
+      /\b(?:help ?desk|it support|desktop support|technical support|service desk|it (?:technician|specialist|analyst|associate)|systems? (?:administrator|technician)|network (?:administrator|technician|engineer|operations)|field service (?:technician|engineer)|end user (?:support|computing)|tier [12] support)\b/i,
   },
   {
     id: 'qa_testing',

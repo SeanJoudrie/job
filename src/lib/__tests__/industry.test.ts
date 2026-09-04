@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { industryFor, industryOf, isCreativeFunction, isFrontline, TIER_A, type Posting } from '../industry'
+import { INSTITUTIONAL_BOOST, industryFor, industryOf, isCreativeFunction, isFrontline, TIER_A, type Posting } from '../industry'
 import type { Job } from '../../types'
 
 const p = (over: Partial<Posting> = {}): Posting => ({ title: '', company: 'Acme', body: '', ...over })
@@ -151,13 +151,22 @@ describe('the institutional boost', () => {
 describe('the software-employer discount', () => {
   // "Poor fit: software companies where he'd be measured against career
   // engineers." The same title elsewhere is one of his best options.
+  // Data analysis, not IT support. Support was moved to 4.5 when the two case
+  // files were reconciled, which put it under the 5.5 ceiling — so it stopped
+  // exercising this rule at all and the test would have passed while the
+  // discount did nothing. The example has to be a role the ceiling still bites.
   it('discounts a technical role at a software company', () => {
-    expect(w({ title: 'IT Support Specialist', sector: 'tech' })).toBe(5.5)
+    expect(w({ title: 'Data Analyst' })).toBe(7)
+    expect(w({ title: 'Data Analyst', sector: 'tech' })).toBe(5.5)
   })
   it('lifts the same role at a university without pretending it is something else', () => {
-    // 7 for IT support, lifted by the institution but not all the way to 9 —
-    // the university does not make it an administrative post.
-    expect(w({ title: 'IT Support Specialist', sector: 'university' })).toBe(8.5)
+    // Lifted by exactly the institutional boost and no further — a university
+    // does not turn an analyst's post into an administrative one.
+    expect(w({ title: 'Data Analyst', sector: 'university' })).toBe(7 + INSTITUTIONAL_BOOST)
+  })
+  it('does not lift IT support past the bottom of the range, now that it is a fallback', () => {
+    // 4.5 + the boost is still under social services at 5.
+    expect(w({ title: 'IT Support Specialist', sector: 'university' })).toBe(4.5 + INSTITUTIONAL_BOOST)
   })
   it('leaves a non-technical role at a software company alone', () => {
     expect(w({ title: 'Office Coordinator', sector: 'tech' })).toBe(5)
@@ -320,5 +329,43 @@ describe('nurses and therapists, whatever the title wraps them in', () => {
     // "\bnurse\b" cannot match "Nursing", which is what keeps these in.
     for (const t of ['Assistant Director, Nursing Programs', 'Nursing Administrative Coordinator', 'Unit Secretary'])
       expect(industryOf(p({ title: t }), JULY).excluded, t).toBe(false)
+  })
+})
+
+/**
+ * IT support: kept, and moved down.
+ *
+ * The two case files contradict each other here — the first says apply anyway
+ * at entry and support tier, the second calls IT a career track to stay out of.
+ * He settled it: they stay in the pool and stop competing at the top. So this
+ * has to fail both ways — if the weight climbs back up, and if the roles stop
+ * classifying at all.
+ */
+describe('IT support is a fallback, not a target', () => {
+  it('still classifies rather than falling off the table', () => {
+    for (const title of [
+      'Service Desk Analyst', 'Help Desk Technician', 'Desktop Support Specialist',
+      'Systems Administrator II', 'Network Administrator', 'Network Technician', 'IT Specialist',
+    ]) {
+      expect(id({ title })).toBe('it_helpdesk_support')
+      expect(industryOf(p({ title }), JULY).excluded).toBe(false)
+    }
+  })
+
+  it('scores below the acceptable middle, so it does not lead the list', () => {
+    const weight = w({ title: 'Service Desk Analyst' })
+    expect(weight).toBeLessThan(5)
+    expect(weight).toBeGreaterThan(0)
+    // Below social services, which is the bottom of the range he would take.
+    expect(weight).toBeLessThan(w({ title: 'Case Manager' }))
+  })
+
+  it('is not in Tier A', () => {
+    expect(TIER_A.has('it_helpdesk_support')).toBe(false)
+  })
+
+  it('leaves data and analysis where they were — that is not the helpdesk track', () => {
+    expect(id({ title: 'Data Analyst' })).toBe('data_analysis')
+    expect(w({ title: 'Data Analyst' })).toBe(7)
   })
 })
