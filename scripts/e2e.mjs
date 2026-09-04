@@ -289,9 +289,17 @@ check('search narrows the lane', searched < searchBase, `${searched} of ${search
 // Search covers the description as well as the heading. Where the match is in
 // the description, the row must show the matching words — a result with no
 // visible reason for being there reads as the search misfiring.
+// Grouped is the default here, so the employer is in the group header rather
+// than on the row — a row matched on its employer's name has to say so itself.
+// Federal postings were what exposed that: "engineer" pulled in the Army Corps
+// of Engineers and three rows came back with the word nowhere on them.
 const shownRows = await rows().allInnerTexts()
 const unexplained = shownRows.filter((t) => !/engineer/i.test(t))
-check('every result shows why it matched', unexplained.length === 0, `${shownRows.length - unexplained.length}/${shownRows.length} explain themselves`)
+check('every result shows why it matched', unexplained.length === 0,
+  unexplained.length
+    // Name them. "38/41 explain themselves" took a code read to diagnose.
+    ? `${unexplained.length} do not: ${unexplained.map((t) => t.split('\n')[0].slice(0, 40)).join(' | ').slice(0, 150)}`
+    : `all ${shownRows.length} explain themselves`)
 await page.getByLabel('Search this lane').fill('')
 await page.waitForTimeout(400)
 

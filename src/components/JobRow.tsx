@@ -13,14 +13,26 @@ const VERDICT_TONE = { matched: 'good', 'soft-gap': 'warn', 'hard-gap': 'bad', u
 const VERDICT_LABEL = { matched: 'met', 'soft-gap': 'soft', 'hard-gap': 'hard', unstated: '—' } as const
 
 /**
- * When a search matched the description rather than the heading, show the words
- * it matched on. Otherwise a row appears in the results with no visible reason,
+ * When a search matched something the row does not already show, show what it
+ * matched on. Otherwise a row appears in the results with no visible reason,
  * which reads as the search misfiring — and this app does not do invisible.
+ *
+ * `showCompany` is the whole subtlety. Grouped — which is the default — the
+ * employer is in the group header and not on the row, so suppressing a match
+ * because "it is in the company" hides the only reason that row is there. It
+ * took federal postings to surface it: searching "engineer" pulled in the Army
+ * Corps of Engineers and Naval Facilities Engineering, and three rows came back
+ * with the word nowhere on them. Ungrouped the old behaviour was right, which
+ * is why this was invisible for as long as the pool had no employer with a
+ * common search word in its name.
  */
-function snippet(job: Job, query: string): string | null {
+export function snippet(job: Job, query: string, showCompany = true): string | null {
   const q = query.trim().toLowerCase()
   if (!q) return null
-  if (`${job.title} ${job.company}`.toLowerCase().includes(q)) return null
+  // Only stay quiet about text the row itself puts on screen.
+  const shown = showCompany ? `${job.title} ${job.company}` : job.title
+  if (shown.toLowerCase().includes(q)) return null
+  if (!showCompany && job.company.toLowerCase().includes(q)) return job.company
   const text = job.descText || job.preview || ''
   const at = text.toLowerCase().indexOf(q)
   if (at < 0) return null
@@ -59,7 +71,7 @@ export function JobRow({
   const gaps = gapsFor(job.requirements, profile)
   const shown = showAll ? gaps : gaps.filter((g) => g.verdict !== 'unstated').slice(0, 8)
   const boards = boardCount(job)
-  const match = snippet(job, query)
+  const match = snippet(job, query, showCompany)
 
   return (
     <li className="border-b line">
