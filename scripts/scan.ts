@@ -5,6 +5,7 @@ import { industryOf } from '../src/lib/industry'
 import { HOME, isRemote, nearestMiles, parseLocations } from '../src/lib/location'
 import { formatPay, parsePay, toAnnual } from '../src/lib/pay'
 import { countGaps, gapsFor, parseRequirements } from '../src/lib/requirements'
+import { tuitionEmployers } from '../src/lib/perks'
 import { classifyFamilies } from '../src/lib/roles'
 import type { Job } from '../src/types'
 import { fetchBoard, fetchUsaJobs, type Raw } from './sources'
@@ -293,6 +294,11 @@ async function main() {
    * body and the body does not survive the trim. Only the id is stored — the
    * weight depends on the month it is read in.
    */
+  // Decided over the whole run, before the bodies are thrown away: it is a
+  // property of an employer's board, not of any one posting on it.
+  const paysTuition = tuitionEmployers(merged.map((j) => ({ company: j.company, body: j.descText })))
+  console.log(`\n  ${paysTuition.size} employers whose board names a tuition benefit`)
+
   const index = merged.map(({ descText, locations, requirements, ...rest }) => {
     const resolved = locations.filter((l) => typeof l.miles === 'number')
     const nearest = resolved.length ? resolved.reduce((a, b) => (a.miles! <= b.miles! ? a : b)) : locations[0]
@@ -306,6 +312,7 @@ async function main() {
       industry: (({ id, why }) => ({ id, why }))(
         industryOf({ title: rest.title, company: rest.company, body: descText, sector: rest.sector, families: rest.families }),
       ),
+      ...(paysTuition.has(rest.company) ? { tuition: true as const } : {}),
       preview: descText.slice(0, 280),
     }
   })

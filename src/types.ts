@@ -71,6 +71,13 @@ export type Job = {
   /** how many places the posting named, before the index kept only the nearest */
   placeCount?: number
   /**
+   * This employer's board says it pays for study. Decided per employer at scan
+   * time from the full descriptions, because it is a benefits-block paragraph
+   * that appears on a whole board or on none of it — see `lib/perks.ts`. Only
+   * ever true; absent means no.
+   */
+  tuition?: true
+  /**
    * Gap counts computed at scan time from the FULL requirement list.
    * The index drops unclassifiable requirement lines to stay small, which left
    * 38% of jobs looking like they had no requirements at all and defaulted the

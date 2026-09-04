@@ -109,6 +109,9 @@ export function JobRow({
             {job.reposts > 0 && !deadReq && <Chip tone="warn">reposted {job.reposts}×</Chip>}
             {job.linkOk === false && <Chip tone="bad">dead link</Chip>}
             {boards > 1 && <Chip>on {boards} boards</Chip>}
+            {/* Not scored — see lib/perks.ts. Shown because it is the thing
+                that decides between a $27 job here and a $32 job elsewhere. */}
+            {job.tuition && <Chip tone="good">tuition paid</Chip>}
             {industry.id !== 'unclassified' && (
               <Chip tone={industry.excluded ? 'bad' : industry.weight >= 8 ? 'good' : 'plain'}>{industry.label}</Chip>
             )}

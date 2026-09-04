@@ -167,6 +167,26 @@ check('and it returns actual jobs', crossoverCount > 0, `${crossoverCount} in Cr
 // The lane the case file scores at zero is gone. I built it before reading it.
 check('the public safety lane is gone', !laneNames.some((t) => /Public safety/.test(t)))
 
+// A degree paid for is the thing that decides between a $27 job here and a $32
+// job elsewhere, and it is deliberately not in the score — so it has to be
+// reachable as a lane or it is not in the app at all.
+const tuitionChip = page.locator('button.chip', { hasText: /^Tuition paid/ })
+check('there is a lane for employers who pay for study', (await tuitionChip.count()) === 1)
+await tuitionChip.click()
+await page.waitForTimeout(500)
+const tuitionCount = await showing()
+// Populated only after a scan writes the flag; locally the index predates it.
+if (tuitionCount > 0) {
+  const chips = await page.locator('main').innerText()
+  check('and every job in it says so on the row', /tuition paid/i.test(chips), `${tuitionCount} jobs`)
+} else {
+  check('the tuition lane is present but empty until the next scan writes the flag', true, '0 jobs in this index')
+}
+// Put the lane back. Leaving an empty one selected made the next check read an
+// empty list and fail on a change that had nothing to do with it.
+await page.locator('button.chip', { hasText: /^Easy hire/ }).click()
+await page.waitForTimeout(500)
+
 // Light, always — this is read outdoors, and a phone flipping to dark at dusk
 // changed the app out from under its owner.
 const bg = await page.evaluate(() => getComputedStyle(document.body).backgroundColor)

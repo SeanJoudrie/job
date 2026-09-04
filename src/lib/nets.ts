@@ -34,6 +34,8 @@ export type Rule =
   | { id: string; enabled: boolean; type: 'frontline'; minHourly: number }
   /** Communications, media, editorial, design — the crossover search. */
   | { id: string; enabled: boolean; type: 'creative' }
+  /** Employers whose board pays for study. A fact about the employer; see lib/perks.ts. */
+  | { id: string; enabled: boolean; type: 'tuition' }
 
 export type Net = { id: string; name: string; rules: Rule[] }
 
@@ -99,6 +101,8 @@ export function passes(job: Job, rule: Rule, appliedKeys: Set<string>, keyOf: (j
     }
     case 'creative':
       return isCreativeFunction(job)
+    case 'tuition':
+      return job.tuition === true
   }
 }
 
@@ -153,6 +157,8 @@ export function describeRule(rule: Rule): string {
       return `− retail & front-line service under $${rule.minHourly}/hr`
     case 'creative':
       return '+ communications, media, editorial or design'
+    case 'tuition':
+      return '+ employers who pay for study'
   }
 }
 
@@ -202,7 +208,12 @@ const base = (floor: number, maxMinutes = 30): Rule[] => [
  * 3: rebuilt on the case file — commute in minutes, the industry table, the
  * front-line pay rule, and the crossover search that had never been run.
  */
-export const LANES_VERSION = 3
+/**
+ * v4 adds the tuition lane. A stored v3 set would never show it — the saved
+ * value beats the shipped default, which is exactly the trap this number exists
+ * for and has already caught twice.
+ */
+export const LANES_VERSION = 4
 
 /**
  * The rules the Top list ranks within.
@@ -226,6 +237,10 @@ export function defaultLanes(floor: number, maxMinutes = 30): Net[] {
     // The one the case file singles out as never having been tried: a Tier A
     // institution and a job that involves writing or making something.
     { id: 'crossover', name: 'Crossover', rules: [...b(), mkRule({ type: 'industry', min: 8 }), mkRule({ type: 'creative' })] },
+    // A degree paid for is worth more than the gap between $27 and $32 an hour,
+    // and it is not in the score on purpose — see lib/perks.ts. A lane is how
+    // he sees it without the model double-counting the employer.
+    { id: 'tuition', name: 'Tuition paid', rules: [...b(), mkRule({ type: 'tuition' })] },
     { id: 'coordination', name: 'Coordination', rules: [...b(), fam('coordinator')] },
     { id: 'operations', name: 'Operations', rules: [...b(), fam('operations')] },
     { id: 'education', name: 'Higher ed & schools', rules: [...b(), ind('higher_education_admin', 'k12_school_district_nonteaching')] },
