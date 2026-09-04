@@ -20,9 +20,11 @@ import { read, write } from './lib/storage'
 import type { Job } from './types'
 import { coverLetter, scoreJob, type Verdict } from './lib/claude'
 import { OutcomesView } from './components/Outcomes'
+import { PeopleView, WeekBar } from './components/People'
 import { captureCtx } from './lib/outcomes'
+import { loadContacts, statsOf, type Person } from './lib/contacts'
 
-type View = 'top' | 'pool' | 'applied' | 'outcomes' | 'dupes' | 'docs' | 'settings'
+type View = 'top' | 'pool' | 'applied' | 'people' | 'outcomes' | 'dupes' | 'docs' | 'settings'
 /** Which document is open over the list, if any. */
 type OpenDoc = { pack: Pack; kind: 'resume' | 'letter' }
 type Sort = 'fit' | 'commute' | 'pay' | 'newest' | 'title' | 'gettable'
@@ -55,6 +57,7 @@ export default function App() {
   const [busy, setBusy] = useState<string | null>(null)
   const [doc, setDoc] = useState<OpenDoc | null>(null)
   const [topSort, setTopSort] = useState<TopSort>(() => read<TopSort>('job.topsort.v1', 'score'))
+  const [people, setPeople] = useState<Person[]>(loadContacts)
 
   useEffect(() => {
     loadIndex().then(setIndex).catch((e: Error) => setError(e.message))
@@ -278,15 +281,22 @@ export default function App() {
 
   const appliedList = Object.values(applied).sort((a, b) => b.at.localeCompare(a.at))
   const dupes = jobs.filter((j) => j.alsoOn.length > 0)
+  const network = statsOf(people)
 
   return (
     <Shell>
       <header className="sticky top-0 z-10 border-b line" style={{ background: 'var(--bg)' }}>
+        {/* The people count sits above everything, alone on its line.
+            Applications sent is the number that has not worked; putting it
+            first for a year is part of why. */}
+        <div className="flex items-center gap-2 border-b line px-3 py-1.5">
+          <WeekBar week={network.week} due={network.due} onClick={() => setView('people')} />
+        </div>
         <div className="flex items-center gap-2 px-3 pt-2">
           <h1 className="text-sm font-semibold">Jobs</h1>
           <span className="text-[11px] faint">{index.count} scanned · {new Date(index.generatedAt).toLocaleDateString()}</span>
           <nav className="ml-auto flex gap-2 text-xs">
-            {(['top', 'pool', 'applied', 'outcomes', 'dupes', 'docs', 'settings'] as View[]).map((v) => (
+            {(['top', 'pool', 'applied', 'people', 'outcomes', 'dupes', 'docs', 'settings'] as View[]).map((v) => (
               <button key={v} onClick={() => setView(v)} aria-current={view === v} style={{ color: view === v ? 'var(--accent)' : 'var(--muted)' }}>
                 {v === 'dupes' ? `dupes ${dupes.length}` : v === 'applied' ? `applied ${appliedList.length}` : v}
               </button>
@@ -455,6 +465,7 @@ export default function App() {
           jobsById={byId}
         />
       )}
+      {view === 'people' && <PeopleView list={people} onChange={setPeople} />}
       {view === 'outcomes' && (
         <OutcomesView list={appliedList} savings={settings.savings} burn={settings.monthlyBurn} />
       )}

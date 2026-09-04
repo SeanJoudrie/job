@@ -414,6 +414,40 @@ check('it says how much more is needed before the weights can be judged', /Not y
 // Nothing was entered, so nothing is claimed about the money.
 check('and shows no runway until a savings figure is entered', !/Take the job|Bridge work now|Review the strategy/.test(outText))
 
+// --- people, which is the channel that has actually worked -----------------
+// The counter is above the nav rather than in it, so it reads before the
+// application count does. That placement is the point, so it is asserted.
+const weekBar = page.getByLabel('People this week')
+check('the week\u2019s people count sits above everything', (await weekBar.count()) === 1,
+  (await weekBar.innerText()).replace(/\n/g, ' '))
+check('and it starts the week behind, not blank', /0\/10/.test(await weekBar.innerText()))
+
+await weekBar.click()
+await page.waitForTimeout(300)
+await page.getByLabel('Name').fill('Dana Ruiz')
+await page.getByLabel('Where').fill('Northeastern')
+await page.getByLabel('Their role').fill('Program Manager')
+await page.getByRole('button', { name: 'add', exact: true }).click()
+await page.waitForTimeout(300)
+const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('job.contacts.v1') ?? '[]'))
+check('adding a person writes it immediately', stored.length === 1 && stored[0].name === 'Dana Ruiz',
+  JSON.stringify(stored[0] ?? {}).slice(0, 90))
+check('and the week count moves', /1\/10/.test(await weekBar.innerText()), await weekBar.innerText())
+
+await page.getByRole('button', { name: 'messaged today' }).first().click()
+await page.waitForTimeout(300)
+const touched = await page.evaluate(() => JSON.parse(localStorage.getItem('job.contacts.v1') ?? '[]')[0])
+check('marking a message sent advances them and stamps the clock',
+  touched?.stage === 'reached out' && !!touched?.lastTouch, `${touched?.stage} / ${touched?.lastTouch?.slice(0, 10)}`)
+
+await page.reload({ waitUntil: 'networkidle' })
+await page.waitForSelector('nav')
+await page.getByRole('button', { name: /^people/ }).click()
+await page.waitForTimeout(400)
+const peopleText = await page.locator('main').innerText()
+check('the contact survives a reload', /Dana Ruiz/.test(peopleText))
+check('and the page says why this number is the one that matters', /passing something along/.test(peopleText))
+
 // --- duplicates ------------------------------------------------------------
 await page.getByRole('button', { name: /^dupes/ }).click()
 await page.waitForTimeout(400)
