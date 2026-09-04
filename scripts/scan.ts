@@ -5,6 +5,7 @@ import { industryOf } from '../src/lib/industry'
 import { HOME, isRemote, nearestMiles, parseLocations } from '../src/lib/location'
 import { formatPay, parsePay, toAnnual } from '../src/lib/pay'
 import { countGaps, gapsFor, parseRequirements } from '../src/lib/requirements'
+import { gradeRequirement, parseGsGrade } from '../src/lib/gsgrade'
 import { tuitionEmployers } from '../src/lib/perks'
 import { classifyFamilies } from '../src/lib/roles'
 import type { Job } from '../src/types'
@@ -99,6 +100,7 @@ function enrich(raw: Raw): Job | null {
   if (!remote && (miles === null || miles > MAX_MILES)) return null
 
   const pay = parsePay(raw.payHint) ?? parsePay(raw.descText)
+  const gsGrade = raw.source === 'usajobs' ? parseGsGrade(`${raw.title} ${raw.descText}`) : null
   return {
     id: raw.id,
     source: raw.source,
@@ -111,7 +113,14 @@ function enrich(raw: Raw): Job | null {
     miles,
     remote,
     pay,
-    requirements: parseRequirements(raw.descText),
+    // The General Schedule grade, stated twice on purpose: as a requirement so
+    // it lands in the same gap counts and "why" as everything else on the row,
+    // and as a field so winnability can read it without re-parsing prose.
+    requirements: [
+      ...parseRequirements(raw.descText),
+      ...(gsGrade !== null ? [gradeRequirement(gsGrade)!] : []),
+    ],
+    ...(gsGrade !== null ? { gsGrade } : {}),
     families: classifyFamilies(raw.title, raw.descText, raw.company),
     postedAt: raw.postedAt,
     firstSeen: TODAY,

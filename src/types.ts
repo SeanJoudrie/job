@@ -78,6 +78,13 @@ export type Job = {
    */
   tuition?: true
   /**
+   * The General Schedule grade a federal posting is advertised at, highest of
+   * an advertised ladder. Absent on everything that is not federal. See
+   * `lib/gsgrade.ts` — it is the hardest requirement in the pool and the only
+   * one nothing could read.
+   */
+  gsGrade?: number
+  /**
    * Gap counts computed at scan time from the FULL requirement list.
    * The index drops unclassifiable requirement lines to stay small, which left
    * 38% of jobs looking like they had no requirements at all and defaulted the

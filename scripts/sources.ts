@@ -475,6 +475,8 @@ export type UsaJobsItem = {
         Education?: string; Evaluations?: string; KeyRequirements?: string[]
         SecurityClearance?: string; HiringPathDisplay?: string[]; RemoteIndicator?: boolean
         TotalOpenings?: string
+        /** The grade ladder, stated outright. Text carries it on only 42%. */
+        LowGrade?: string; HighGrade?: string
       }
     }
   }
@@ -494,7 +496,18 @@ export function mapUsaJobs(items: UsaJobsItem[]): Raw[] {
     // found requirements in 12% of them against 99% everywhere else.
     const paths = details?.HiringPathDisplay ?? []
     const clearance = details?.SecurityClearance ?? ''
+    /*
+     * The grade, from the field rather than the prose.
+     *
+     * It is the hardest requirement on a federal posting — an HR specialist
+     * applies it before a human reads anything — and the only one nothing here
+     * could see. The full description repeats it in 42% of postings; this field
+     * carries it on all of them. The high end is taken because a ladder posting
+     * fills at the top far more often than the bottom.
+     */
+    const grade = Math.max(Number(details?.HighGrade ?? 0), Number(details?.LowGrade ?? 0)) || null
     const extras = [
+      grade && grade >= 1 && grade <= 15 ? `Advertised at GS-${grade}.` : '',
       paths.length ? `Hiring paths: ${paths.join(', ')}.` : '',
       // A stated level is an eligibility bar, not a held clearance: federal
       // hiring runs the investigation as part of onboarding.

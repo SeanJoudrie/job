@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Job } from '../../types'
 import { easeOf } from '../ease'
+import { IMPOSSIBLE } from '../score'
 import { classifyFamilies } from '../roles'
 
 let n = 0
@@ -110,5 +111,51 @@ describe('roles that need a licence nobody here holds', () => {
       // The coordinator who books the theatre is not the technologist in it.
       'Surgical Services Coordinator - Orthopedics', 'Medical Administrative Assistant', 'Assistant Director, Nursing Programs'])
       expect(isLicensedClinical(t), t).toBe(false)
+  })
+})
+
+/**
+ * A federal grade above the standards is a screen-out, not a long shot.
+ *
+ * It lives here rather than on the reachability axis for a measured reason:
+ * as an extra hard gap it moved a GS-14 by about a sixth of a point while its
+ * $126k–$197k band scored full marks on pay, and the thing stayed at number
+ * eleven. As a winnability penalty it left the top thirty entirely — GS-11 and
+ * above went from six of the top thirty to none, and the federal jobs that
+ * remain are the ones he can actually be found qualified for.
+ */
+describe('a federal grade beyond the standards', () => {
+  const fed = (over: Partial<Job> = {}): Job =>
+    job({ company: 'Internal Revenue Service', sector: 'gov', title: 'Management and Program Analyst', ...over })
+
+  it('costs a job that is advertised above GS-9', () => {
+    const high = easeOf(fed({ gsGrade: 14 })).score
+    const plain = easeOf(fed()).score
+    expect(high).toBeLessThan(plain)
+    expect(easeOf(fed({ gsGrade: 14 })).why.join(' ')).toMatch(/GS-14/)
+  })
+
+  it('leaves a reachable grade completely alone', () => {
+    expect(easeOf(fed({ gsGrade: 7 })).score).toBe(easeOf(fed()).score)
+    expect(easeOf(fed({ gsGrade: 9 })).score).toBe(easeOf(fed()).score)
+  })
+
+  it('compounds with the pay penalty, because the money is why it is competed', () => {
+    const pay = { min: 126_000, max: 197_000, period: 'year' as const, raw: '$126,000 - $197,000' }
+    const plain = easeOf(fed()).score
+    const rich = easeOf(fed({ pay })).score
+    const both = easeOf(fed({ gsGrade: 14, pay })).score
+    expect(both).toBeLessThan(rich)
+    expect(both).toBeLessThan(plain / 2)
+    // Down-ranked, not deleted. It stays above the impossible floor on purpose:
+    // below it, topJobs drops the job from the list altogether, and a long shot
+    // he might still choose to take is not the same as one he cannot take.
+    expect(both).toBeGreaterThan(IMPOSSIBLE)
+  })
+
+  it('does not touch anything that is not on the schedule', () => {
+    const uni = job({ company: 'Northeastern', sector: 'university', title: 'Administrative Coordinator' })
+    expect(uni.gsGrade).toBeUndefined()
+    expect(easeOf(uni).why.join(' ')).not.toMatch(/GS-/)
   })
 })

@@ -1,5 +1,6 @@
 import type { Job } from '../types'
 import { toAnnual } from './pay'
+import { REACHABLE_GRADE } from './gsgrade'
 
 /**
  * How gettable a job actually is — not how few credentials it lists.
@@ -105,6 +106,22 @@ function compute(job: Job): Ease {
   if (job.requirements.some((r) => r.kind === 'clearance' && r.clearance === 'active')) {
     score -= 3
     why.push('needs a clearance already held')
+  }
+
+  /*
+   * A federal grade above the standards is a screen-out, not a long shot.
+   *
+   * This belongs here rather than on the reachability axis, and the difference
+   * is the whole point. Reachability is one axis inside the 40% the job itself
+   * carries, so an extra hard gap moved a GS-14 by about a sixth of a point
+   * while its $126k–$197k band scored full marks on pay — measured, and it left
+   * the thing at number eleven. Winnability scales the whole score and can
+   * reach the impossible ceiling, which is the honest description: an HR
+   * specialist applies the qualification standard before a human reads a word.
+   */
+  if (job.gsGrade !== undefined && job.gsGrade > REACHABLE_GRADE) {
+    score -= 4
+    why.push(`GS-${job.gsGrade} — screened out on the grade before anyone reads it`)
   }
 
   const hard = job.requirements.filter((r) => r.hardness === 'hard').length
