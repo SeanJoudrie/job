@@ -135,3 +135,48 @@ describe('not everything is a requirement', () => {
     expect(parseRequirements(html)).toHaveLength(2)
   })
 })
+
+/**
+ * "Bachelor's degree from an accredited school of nursing" matched the word
+ * bachelor's, found a bachelor's on the profile, and reported the requirement
+ * MET. The level was compared and the field thrown away, so a nursing
+ * supervisor post read "1 met · 0 soft · 0 hard" and scored 9.5.
+ */
+describe('a degree in a field that is really a licence', () => {
+  const PROFILE = { years: 5, degree: 'bachelor' as const, clearance: 'none' as const }
+  const verdict = (text: string) => gapsFor(parseRequirements(`Requirements\n- ${text}`), PROFILE)[0]
+
+  it('does not call a nursing degree met just because the level matches', () => {
+    const g = verdict("Bachelor's degree from an accredited school of nursing")
+    expect(g.verdict).toBe('hard-gap')
+    expect(g.why).toMatch(/nursing/)
+  })
+
+  it('does the same for the other licensed fields', () => {
+    for (const t of ["Bachelor's degree in pharmacy", "Master's degree in social work", "Bachelor's in physical therapy"]) {
+      expect(verdict(t).verdict).toBe('hard-gap')
+    }
+  })
+
+  it('leaves an ordinary named field alone, because employers do', () => {
+    // A bachelor's in business is a shape, not a rule. Turning every named
+    // field into a wall would empty the list of the admin work he should see.
+    for (const t of ["Bachelor's degree in business or a related field", "Bachelor's degree in communications", "Bachelor's degree required"]) {
+      expect(verdict(t).verdict).toBe('matched')
+    }
+  })
+})
+
+describe('a licence issued by a state board', () => {
+  const PROFILE = { years: 5, degree: 'bachelor' as const, clearance: 'none' as const }
+  const verdict = (text: string) => gapsFor(parseRequirements(`Requirements\n- ${text}`), PROFILE)[0]
+
+  it('is a hard gap, not "not something the profile can answer"', () => {
+    const g = verdict('Current licensure from the Massachusetts Board of Registration in Nursing')
+    expect(g.verdict).toBe('hard-gap')
+  })
+
+  it('is still not a driver’s licence', () => {
+    expect(verdict('Valid driver’s license required').verdict).toBe('matched')
+  })
+})

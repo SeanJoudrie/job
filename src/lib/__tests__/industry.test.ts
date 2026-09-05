@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { INSTITUTIONAL_BOOST, industryFor, industryOf, isCreativeFunction, isFrontline, TIER_A, type Posting } from '../industry'
+import { CLINICAL_CREDENTIAL, INSTITUTIONAL_BOOST, industryFor, industryOf, isCreativeFunction, isFrontline, TIER_A, type Posting } from '../industry'
 import type { Job } from '../../types'
 
 const p = (over: Partial<Posting> = {}): Posting => ({ title: '', company: 'Acme', body: '', ...over })
@@ -367,5 +367,73 @@ describe('IT support is a fallback, not a target', () => {
   it('leaves data and analysis where they were — that is not the helpdesk track', () => {
     expect(id({ title: 'Data Analyst' })).toBe('data_analysis')
     expect(w({ title: 'Data Analyst' })).toBe(7)
+  })
+})
+
+/**
+ * The clinical job whose title hides it.
+ *
+ * "Administrative Clinical Supervisor Per Diem" at Beth Israel Lahey has no
+ * clinical word in its title, so a title-only exclusion never saw it. Its
+ * requirements are a BSN, a Massachusetts RN licence and three years of
+ * nursing. It reached the ninety-fifth percentile and read "1 met · 0 soft ·
+ * 0 hard", because the only requirement anything could parse was the word
+ * "Bachelor's".
+ */
+const NURSING_SUPERVISOR = `
+Bachelor's degree from an accredited school of nursing. M.S.N. with nursing
+management experience and/or clinical specialists preparation.
+Current licensure from the Massachusetts Board of Registration in Nursing.
+Three years of progressive nursing experience, preferably including supervisory experience.
+`
+
+describe('a clinical job that does not say so in its title', () => {
+  it('is excluded on what its requirements demand', () => {
+    const out = industryOf(p({ title: 'Administrative Clinical Supervisor Per Diem', company: 'Beth Israel Lahey Health', body: NURSING_SUPERVISOR, sector: 'health' }))
+    expect(out.excluded).toBe(true)
+    expect(out.weight).toBe(0)
+  })
+
+  it('catches the licence demanded of the reader', () => {
+    for (const body of [
+      'Must hold a current, active and unencumbered Registered Nurse license.',
+      'Current licensure from the Massachusetts Board of Registration in Nursing.',
+      'BSN required.',
+      'Valid license as a registered nurse in Massachusetts.',
+    ]) {
+      expect(CLINICAL_CREDENTIAL.test(body)).toBe(true)
+    }
+  })
+
+  /**
+   * The far more expensive mistake, in the other direction. Hospital postings
+   * mention nurses constantly, and matching that prose would delete hospital
+   * administration — 433 jobs, one of the better categories on the list. It
+   * currently loses 18 of them, which is the 4% that genuinely are nursing.
+   */
+  it('does not touch an administrative job that merely mentions nurses', () => {
+    for (const body of [
+      'Works closely with nursing staff and supports the nursing units.',
+      'Schedules appointments for physicians and nurses across three clinics.',
+      'Reports to the Director of Nursing.',
+    ]) {
+      expect(CLINICAL_CREDENTIAL.test(body)).toBe(false)
+    }
+  })
+
+  it('reads a school of nursing as a qualification, never as a department', () => {
+    // "Academic Coach, School of Nursing" is a support job at a nursing school.
+    expect(CLINICAL_CREDENTIAL.test('Academic Coach in the School of Nursing supporting student success.')).toBe(false)
+    expect(CLINICAL_CREDENTIAL.test("Bachelor's degree from an accredited school of nursing.")).toBe(true)
+  })
+
+  it('leaves a patient services job alone', () => {
+    const out = industryOf(p({
+      title: 'Patient Services Representative',
+      company: 'Beth Israel Lahey Health',
+      body: 'Greets patients, schedules appointments, verifies insurance. High school diploma required.',
+      sector: 'health',
+    }))
+    expect(out.excluded).toBe(false)
   })
 })

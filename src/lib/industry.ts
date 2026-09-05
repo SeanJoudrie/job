@@ -95,6 +95,33 @@ export const LICENSED_CLINICAL =
   )
 
 /**
+ * Credentials that only a clinician holds, written the way a posting demands
+ * them of the candidate rather than the way prose mentions a colleague.
+ */
+export const CLINICAL_CREDENTIAL = new RegExp(
+  [
+    // Named qualifications. These are never incidental.
+    '\\bboard of registration in nursing\\b',
+    // Only as a qualification, never as a department name. "Academic Coach,
+    // School of Nursing" is a support job at a nursing school, not a nursing
+    // job, and excluding it would be the same error in the other direction.
+    '\\b(?:degree|graduat\\w*|diploma)\\b[^.]{0,50}\\b(?:school|college) of nursing\\b',
+    '\\b(?:b\\.?s\\.?n|m\\.?s\\.?n|a\\.?d\\.?n)\\.?\\b',
+    // A licence demanded of the reader, with a clinical profession beside it.
+    '\\b(?:current|active|valid|unrestricted|must (?:have|hold|possess|be)|maintains?)\\b[^.]{0,70}\\blicens\\w*[^.]{0,70}\\b(?:nurs\\w*|pharmac\\w*|physical therap\\w*|occupational therap\\w*|respiratory\\w*|social work\\w*|radiolog\\w*)\\b',
+    '\\blicens\\w*[^.]{0,40}\\b(?:registered nurse|practical nurse|nurse practitioner)\\b',
+    // The same demand written the other way round: "Must hold a current,
+    // active and unencumbered Registered Nurse license." Postings use both
+    // orders, and the first version only read one of them. The specific
+    // credential is required rather than the bare word "nursing", so that
+    // "works with nursing staff, must have a valid driver's license" cannot
+    // match across the clause.
+    '\\b(?:current|active|valid|unencumbered|must (?:hold|have|possess|be)|maintains?)\\b[^.]{0,70}\\b(?:registered nurse|licensed practical nurse|nurse practitioner|\\brn\\b)\\b[^.]{0,40}\\blicens\\w*',
+  ].join('|'),
+  'i',
+)
+
+/**
  * TIER E — excluded. Order matters only in that exclusions are checked first;
  * within the group any match is enough.
  */
@@ -271,6 +298,29 @@ const EXCLUDED: Def[] = [
     title: /^\s*(?:(?:senior|executive)\s+)?vice president\b|^\s*president\b|^\s*chief\s+\w+\s+officer\b|^\s*(?:ceo|cfo|coo|cto|cio|provost|chancellor|general counsel)\b|^\s*(?:assistant |associate )?dean\b/i,
   },
   { id: 'clinical_licensed', label: 'licensed clinical', weight: 0, exclude: true, title: LICENSED_CLINICAL },
+  {
+    /**
+     * The clinical job whose title hides it.
+     *
+     * "Administrative Clinical Supervisor Per Diem" at Beth Israel contains no
+     * clinical word at all, so a title-only exclusion never saw it. Its
+     * requirements are a BSN, a Massachusetts RN licence and three years of
+     * nursing. It ranked ninety-fifth percentile.
+     *
+     * The body is read, but only for phrases that can be nothing else. A loose
+     * check would be far worse than this bug: hospital job descriptions say
+     * "nurse" constantly — "works closely with nursing staff", "supports the
+     * nursing units" — and matching those would delete hospital administration
+     * entirely, which is one of the better categories on the list. "School of
+     * nursing", "BSN" and "Board of Registration in Nursing" appear when the
+     * candidate must be a nurse and essentially never otherwise.
+     */
+    id: 'clinical_by_requirement',
+    label: 'licensed clinical',
+    weight: 0,
+    exclude: true,
+    when: (p) => CLINICAL_CREDENTIAL.test(p.body),
+  },
 ]
 
 /** Beats everything: the role is out of reach for a reason the tiers do not capture. */

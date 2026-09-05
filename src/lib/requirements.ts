@@ -135,6 +135,11 @@ const looksLikeRequirement = (line: string) =>
     CLEARANCE.test(line) ||
     DEGREES.some(([re]) => re.test(line)) ||
     /\d\s*\+?\s*years?\b/i.test(line) ||
+    // A licence line often carries none of the words above. "Current licensure
+    // from the Massachusetts Board of Registration in Nursing" says neither
+    // "required" nor "must", so it was not collected as a requirement at all —
+    // and a requirement that is never collected cannot be a gap.
+    PROFESSIONAL_LICENCE.test(line) ||
     /\b(?:proficien|experience|knowledge of|ability to|certif|skilled)/i.test(line))
 
 export function parseRequirements(description: string): Requirement[] {
@@ -190,6 +195,36 @@ export function parseRequirements(description: string): Requirement[] {
 }
 
 /**
+ * A degree in a field that is a licence in disguise.
+ *
+ * "Bachelor's degree from an accredited school of nursing" matched `bachelor's`,
+ * found a bachelor's on the profile, and reported the requirement as MET. The
+ * level was compared and the field was thrown away, so an Administrative
+ * Clinical Supervisor post needing a BSN and a Massachusetts RN licence read
+ * "1 met · 0 soft · 0 hard" and scored 9.5.
+ *
+ * Only fields that are a licence to practise are listed. A posting asking for a
+ * bachelor's in business or communications is left alone on purpose — employers
+ * treat those as a shape rather than a rule, and turning every named field into
+ * a wall would empty the list of exactly the administrative work he should see.
+ * You cannot talk your way into being a nurse.
+ */
+const CLOSED_FIELD =
+  /\b(?:nursing|b\.?s\.?n\.?|m\.?s\.?n\.?|pharmacy|pharm\.?d|medicine|medical school|dentistry|dental|veterinary|social work|m\.?s\.?w\.?|physical therapy|occupational therapy|speech[- ]language patholog\w*|respiratory (?:care|therapy)|radiolog\w*|sonograph\w*|law|juris doctor)\b/i
+
+/**
+ * A licence issued by a state board, which is not something to be argued into.
+ *
+ * Distinct from the quick certificates below: this is an examination, a
+ * qualifying degree and a registration, not a weekend. It arrived as a
+ * requirement of kind `other`, which returns "not something the profile can
+ * answer" — the same as silence, and silence is what let a nursing supervisor
+ * post rank ninth.
+ */
+const PROFESSIONAL_LICENCE =
+  /\b(?:board of registration|state licens\w*|licensure|licensed (?:in|by|as a)|current(?:ly)? licens\w*|active (?:rn|lpn|professional) licens\w*|must be licensed|registered nurse licens\w*|professional licens\w*)\b/i
+
+/**
  * Cards you can hold by next Friday.
  *
  * First aid, CPR, AED, OSHA 10, ServSafe, a forklift ticket — a posting listing
@@ -238,6 +273,10 @@ export function gapsFor(reqs: Requirement[], profile: Profile): Gap[] {
     const gap = (why: string): Gap => ({ requirement: r, verdict: r.hardness === 'hard' ? 'hard-gap' : 'soft-gap', why })
 
     if (r.kind === 'education' && r.degree) {
+      // The field first. A bachelor's in nursing is not a bachelor's he has,
+      // however the levels compare.
+      const field = r.text.match(CLOSED_FIELD)?.[0]
+      if (field) return { requirement: r, verdict: 'hard-gap', why: `wants the degree in ${field.toLowerCase()}` }
       if (DEGREE_RANK[profile.degree] >= DEGREE_RANK[r.degree])
         return { requirement: r, verdict: 'matched', why: `has a ${profile.degree}'s degree` }
       return gap(`wants a ${r.degree}'s; you have a ${profile.degree}'s`)
@@ -258,6 +297,11 @@ export function gapsFor(reqs: Requirement[], profile: Profile): Gap[] {
     // Before the fall-through, because these are the openings most likely to
     // be misread as closed. Stated hardness is overridden on purpose: "First
     // Aid/CPR required" means required by day one, not required to apply.
+    // Before the quick certificates, because "current licensure" would otherwise
+    // never be reached, and a state board is not a weekend course.
+    if (PROFESSIONAL_LICENCE.test(r.text) && !PLAIN_LICENCE.test(r.text))
+      return { requirement: r, verdict: 'hard-gap', why: 'a state licence, which is a qualifying degree and an exam' }
+
     if (QUICK_CERT.test(r.text) && !COMMERCIAL.test(r.text))
       return { requirement: r, verdict: 'soft-gap', why: 'a weekend course, and usually run by the employer' }
     if (PLAIN_LICENCE.test(r.text) && !COMMERCIAL.test(r.text))
