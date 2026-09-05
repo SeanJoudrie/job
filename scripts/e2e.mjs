@@ -466,6 +466,19 @@ check('it says how much more is needed before the weights can be judged', /Not y
 // Nothing was entered, so nothing is claimed about the money.
 check('and shows no runway until a savings figure is entered', !/Take the job|Bridge work now|Review the strategy/.test(outText))
 
+// --- government, which does not play by the same rules ---------------------
+await page.getByRole('button', { name: /^gov/ }).click()
+await page.waitForTimeout(600)
+const govText = await page.locator('main').innerText()
+check('there is a section for government work on its own', /Federal, state, county and town/.test(govText),
+  (govText.match(/\d+ in range[^\n]*/) ?? [''])[0])
+check('and it leads with what he can actually apply to', /you can apply to/.test(govText))
+// The two federal screens a manager never sees. Both were invisible on an
+// ordinary row and both reject before anyone reads a name.
+check('it explains the two screens that reject before a human reads anything',
+  /hiring path/i.test(govText) && /GS-\d/.test(govText),
+  (govText.match(/GS-\d[^\n]{0,40}/) ?? [''])[0])
+
 // --- people, which is the channel that has actually worked -----------------
 // The counter is above the nav rather than in it, so it reads before the
 // application count does. That placement is the point, so it is asserted.

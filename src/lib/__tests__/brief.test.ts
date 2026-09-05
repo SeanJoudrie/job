@@ -20,11 +20,16 @@ const brief = readFileSync(new URL('../claude.ts', import.meta.url), 'utf8')
 const documents = readFileSync(new URL('../documents.ts', import.meta.url), 'utf8')
 
 describe('the profile the letters are written from', () => {
-  it('claims no minor, because the resume has none', () => {
-    expect(/Business Analytics minor/i.test(documents)).toBe(false)
-    // The brief may name it only to forbid it.
-    const claimed = brief.split('\n').filter((l) => /Business Analytics/i.test(l) && !/NO minor|does not carry/i.test(l))
-    expect(claimed).toEqual([])
+  /**
+   * This test previously asserted the opposite, and was wrong.
+   *
+   * An earlier resume omitted the minor, so it was stripped from the brief and
+   * a test written to keep it out. The federal resume carries it: "Bachelor of
+   * Arts, Psychology | Minor: Business Analytics". A test can lock in a
+   * mistake as firmly as it locks in a fix, and this one did for a while.
+   */
+  it('carries the Business Analytics minor, which is on the resume', () => {
+    expect(/Business Analytics/i.test(brief)).toBe(true)
   })
 
   it('counts the shipped work the same way the resume does', () => {

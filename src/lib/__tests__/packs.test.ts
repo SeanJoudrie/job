@@ -124,13 +124,28 @@ describe('the documents say only what the resume says', () => {
   })
 
   it('keeps the dates that are actually on the resume', () => {
-    expect(DEFAULT_DATES.verizon).toBe('May 2023 – Sept 2025')
-    expect(DEFAULT_DATES.snhu).toBe('Oct 2021 – Apr 2023')
+    // From the federal resume, which is the document that goes out attached to
+    // these letters. Three of these were a year or more adrift.
+    expect(DEFAULT_DATES.verizon).toBe('Oct 2023 – May 2024')
+    expect(DEFAULT_DATES.snhu).toBe('Oct 2021 – Apr 2022')
+    expect(DEFAULT_DATES.walgreens).toBe('Aug 2024 – Nov 2024')
     expect(DEFAULT_DATES.guard).toBe('Oct 2025 – present')
   })
 
-  it('does not stretch eighteen months into two years', () => {
-    // Oct 2021 to Apr 2023 is eighteen months. It read as "two years".
+  /**
+   * A letter must never state a duration its own attachment contradicts.
+   *
+   * Seven passages claimed "28 months at Verizon" and "eighteen months" at
+   * SNHU, both computed from dates that were wrong. The resume says eight
+   * months and seven. The durations are gone rather than shrunk — they were
+   * never the point, and the 4.5x is the claim that carries those paragraphs.
+   */
+  it('states no duration that the resume contradicts', () => {
+    expect(everything).not.toMatch(/28 months/i)
+    expect(everything).not.toMatch(/[Ee]ighteen months/)
+  })
+
+  it('does not stretch a few months into two years', () => {
     expect(everything).not.toMatch(/[Tt]wo years .{0,40}(?:student|university|SNHU)/)
   })
 

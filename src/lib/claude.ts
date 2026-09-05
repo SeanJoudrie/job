@@ -20,18 +20,18 @@ logistics and compliance across university, retail and B2B settings, plus a
 shipped self-taught software portfolio.
 
 Verified and resume-supported:
-- Verizon Wireless, Senior Account Manager II Business, 28 months: grew
+- Verizon Wireless, Senior Account Manager II Business: grew
   business-segment revenue 4.5x year over year. This is the strongest single
   line available. He habitually under-narrates it as a failure; do not.
 - Army National Guard, Officer Candidate. Platoon Guide — selected senior peer
   leader over a 58-soldier platoon within a 220-person company. Unit SHARP
   representative and barracks operations representative: compliance, records,
   reporting.
-- BA Psychology, SNHU, 3.7 GPA, President's List 2021-2023, Order of Omega.
-  SGA Head Senator on Budget & Finance; Phi Delta Theta VP; Math Club VP.
-  There is NO minor. An earlier version of this brief claimed a Business
-  Analytics minor; the resume does not carry one, and a letter naming a
-  credential the resume cannot support is the failure rule 1 exists to stop.
+- BA Psychology, minor in Business Analytics, SNHU, 3.7 GPA, 120 semester
+  hours. President's List 2021-2023, Order of Omega, Psi Chi. SGA Senator on
+  Budget & Finance; Phi Delta Theta VP; Math Club VP.
+  The minor was removed from this brief once on the evidence of an earlier
+  resume that omitted it. The federal resume carries it. It is real.
 - SNHU Office of Student Involvement, operations supervisor — direct higher
   education administration experience.
 - Certificates: Yale (Financial Markets with Honors, Connected Leadership,
@@ -138,7 +138,7 @@ ${PROFILE_BRIEF}
 Rules, in order of importance:
 1. Never claim anything the profile does not support. A letter that invents
    experience is worse than no letter.
-2. Lead with the Verizon result — 28 months, business-segment revenue 4.5x —
+2. Lead with the Verizon result — business-segment revenue 4.5x —
    unless this posting makes it genuinely irrelevant.
 3. A clearance in progress is an asset arriving, never a gap. Say eligible and
    pending with a rough date.

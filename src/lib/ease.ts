@@ -1,6 +1,7 @@
 import type { Job } from '../types'
 import { toAnnual } from './pay'
 import { REACHABLE_GRADE } from './gsgrade'
+import { canApply, isGuardPath, pathWhy } from './federal'
 
 /**
  * How gettable a job actually is — not how few credentials it lists.
@@ -48,6 +49,15 @@ export type Ease = { score: number; why: string[] }
  * made gettability look like the only thing the ranking responded to. A
  * logistic curve keeps the same ordering with no cliff at either end.
  */
+/**
+ * A job he is not permitted to apply for.
+ *
+ * The same value as IMPOSSIBLE in score.ts, which is what topJobs filters on,
+ * and it cannot be imported from there — score.ts calls into this file, and the
+ * cycle would be worse than the duplication. A test holds the two together.
+ */
+export const CLOSED_DOOR = 1
+
 const spread = (raw: number) => Math.round((10 / (1 + Math.exp(-(raw - 5) / 3.5))) * 10) / 10
 
 /**
@@ -124,11 +134,35 @@ function compute(job: Job): Ease {
     why.push(`GS-${job.gsGrade} — screened out on the grade before anyone reads it`)
   }
 
+  /*
+   * Not open to him at all.
+   *
+   * A grade is a long shot. This is a closed door: an application against a
+   * posting restricted to current federal employees is binned by HR as
+   * ineligible, unread. Two of every five federal postings on the list were
+   * one of these. Taken to the floor so it leaves the Top list entirely, and
+   * left visible in the pool with the reason on the row — hiding it would only
+   * mean finding it again on USAJOBS and applying anyway.
+   */
+  const closed = !canApply(job.hiringPaths)
+  if (closed) {
+    why.push(pathWhy(job.hiringPaths) || 'not open to applicants outside the agency')
+  } else if (isGuardPath(job.hiringPaths)) {
+    // The rare case where the qualification almost nobody has is the one he
+    // does. Dual-status technician posts require Guard membership.
+    score += 2
+    why.push('open to Guard and reserve members')
+  }
+
   const hard = job.requirements.filter((r) => r.hardness === 'hard').length
   if (hard >= 6) { score -= 2; why.push(`${hard} hard requirements`) }
   else if (hard <= 1) { score += 1; why.push('few hard requirements') }
 
-  return { score: spread(score), why }
+  // Pinned rather than pushed through the curve. The logistic exists to keep
+  // competitive jobs distinguishable from each other, and this one is not
+  // competitive — it is unavailable. Lowering the raw total instead put it at
+  // 3.0, comfortably above the floor that keeps it out of the Top list.
+  return { score: closed ? CLOSED_DOOR : spread(score), why }
 }
 
 export const easeScore = (job: Job) => easeOf(job).score

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Job } from '../../types'
-import { easeOf } from '../ease'
+import { CLOSED_DOOR, easeOf } from '../ease'
 import { IMPOSSIBLE } from '../score'
 import { classifyFamilies } from '../roles'
 
@@ -158,4 +158,32 @@ describe('a federal grade beyond the standards', () => {
     expect(uni.gsGrade).toBeUndefined()
     expect(easeOf(uni).why.join(' ')).not.toMatch(/GS-/)
   })
+})
+
+describe('a federal posting he is not allowed to apply to', () => {
+  const fed = (paths: string[]) =>
+    job({ company: 'Internal Revenue Service', sector: 'gov', title: 'Program Analyst', hiringPaths: paths })
+
+  it('goes to the floor, because it is not a long shot but a closed door', () => {
+    expect(easeOf(fed(['Internal to an agency'])).score).toBeLessThanOrEqual(IMPOSSIBLE)
+  })
+
+  it('says so in words rather than just scoring low', () => {
+    expect(easeOf(fed(['Competitive service'])).why.join(' ')).toMatch(/only open to/)
+  })
+
+  it('leaves an open posting where it was', () => {
+    expect(easeOf(fed(['Open to the public'])).score).toBe(easeOf(job({ company: 'Internal Revenue Service', sector: 'gov', title: 'Program Analyst' })).score)
+  })
+
+  it('lifts one that wants a Guard member, which is the rare qualification he has', () => {
+    const guard = easeOf(fed(['National Guard and reserves'])).score
+    expect(guard).toBeGreaterThan(easeOf(fed(['Open to the public'])).score)
+  })
+})
+
+it('the closed-door floor is the same number topJobs filters on', () => {
+  // CLOSED_DOOR cannot import IMPOSSIBLE — score.ts calls into ease.ts and the
+  // cycle would be worse than the duplication. So they are checked instead.
+  expect(CLOSED_DOOR).toBe(IMPOSSIBLE)
 })

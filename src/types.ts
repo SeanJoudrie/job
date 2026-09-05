@@ -85,6 +85,11 @@ export type Job = {
    */
   gsGrade?: number
   /**
+   * Who a federal posting is open to, verbatim from USAJOBS. Decides whether an
+   * application is even accepted — see `lib/federal.ts`.
+   */
+  hiringPaths?: string[]
+  /**
    * Gap counts computed at scan time from the FULL requirement list.
    * The index drops unclassifiable requirement lines to stay small, which left
    * 38% of jobs looking like they had no requirements at all and defaulted the

@@ -550,6 +550,7 @@ export function mapUsaJobs(items: UsaJobsItem[]): Raw[] {
         : (d.PositionLocation ?? []).map((l) => l.LocationName ?? '').filter(Boolean).join('; '),
         payHint: pay?.MinimumRange ? `$${pay.MinimumRange} - $${pay.MaximumRange ?? pay.MinimumRange} per ${period}` : '',
       postedAt: iso(d.PublicationStartDate),
+      hiringPaths: paths,
     })
   }
   return out

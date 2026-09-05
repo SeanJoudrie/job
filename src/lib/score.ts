@@ -1,6 +1,7 @@
 import type { Job } from '../types'
 import { commuteOf, commuteScore } from './commute'
 import { easeOf } from './ease'
+import { isGuardPath } from './federal'
 import { industryFor } from './industry'
 import { topHourly } from './pay'
 import { postureOf, scheduleOf } from './posture'
@@ -200,7 +201,20 @@ export function axesFor(job: Job, profile: Profile, ctx: Ctx = defaultCtx()): Ax
   // on exactly one number, which cannot order anything.
   const serviceWhy: string[] = []
   let service = 5
-  if (job.sector === 'gov') { service += 3; serviceWhy.push('federal — preference is scored') }
+  /*
+   * Federal service is worth points, but not the ones this used to claim.
+   *
+   * "Preference is scored" says veterans' preference applies. It does not: that
+   * needs three years of continuous active service or a campaign badge, and
+   * training-only active duty for basic training is neither. He is mid-pipeline
+   * in the Guard, which is worth a great deal to a federal hiring manager and
+   * worth nothing at all to the points system. Saying otherwise would send him
+   * at jobs that reject him on a rule.
+   */
+  if (job.sector === 'gov') {
+    service += isGuardPath(job.hiringPaths) ? 4 : 2
+    serviceWhy.push(isGuardPath(job.hiringPaths) ? 'federal, and open to the Guard' : 'federal — service counts, though preference does not yet')
+  }
   // Massachusetts gives veterans statutory preference in municipal civil
   // service too. Scored below federal because it reaches civil-service posts
   // rather than every municipal job, and this cannot tell which is which.

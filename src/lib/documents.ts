@@ -26,11 +26,19 @@ export type Contact = {
 /** Dates are editable, but these are the real ones off the 2026 resume. */
 export type Dates = { guard: string; verizon: string; snhu: string; walgreens: string; mgfitness: string }
 
+/**
+ * Taken from the federal resume, which is the document he actually sends.
+ *
+ * Three of these were wrong here — Verizon, SNHU and Walgreens each by a year
+ * or more — and nothing could have caught it, because a date has no consistency
+ * to check against. A letter generated from this file goes out attached to that
+ * resume, so a disagreement is a letter contradicting its own attachment.
+ */
 export const DEFAULT_DATES: Dates = {
   guard: 'Oct 2025 – present',
-  verizon: 'May 2023 – Sept 2025',
-  snhu: 'Oct 2021 – Apr 2023',
-  walgreens: 'Aug 2022 – May 2023',
+  verizon: 'Oct 2023 – May 2024',
+  snhu: 'Oct 2021 – Apr 2022',
+  walgreens: 'Aug 2024 – Nov 2024',
   mgfitness: 'Aug 2020 – Sept 2022',
 }
 
@@ -233,11 +241,11 @@ export function resumeFor(pack: Pack, dates: Dates): Resume {
  * is not a pre-made letter, it is homework.
  */
 const LETTERS: Record<PackId, string> = {
-  education: `I have done this work. For eighteen months I was the operations supervisor in Southern New Hampshire University’s Office of Student Affairs, coordinating campus-wide operations — event logistics, departmental budgets, vendor and client services, fleet scheduling and the campus food pantry — while completing a full-time degree. «ORGANISATION» is a larger version of the same problem and I would be glad to be back in it.
+  education: `I have done this work. I was the operations supervisor in Southern New Hampshire University’s Office of Student Affairs, coordinating campus-wide operations — event logistics, departmental budgets, vendor and client services, fleet scheduling and the campus food pantry — while completing a full-time degree. «ORGANISATION» is a larger version of the same problem and I would be glad to be back in it.
 
 Two things I want to speak to directly. Coordinating student-facing operations is not oversight but scheduling that actually holds — knowing who is reliable for a nine o’clock and covering the desk yourself when someone does not turn up. And departmental budgets: I held them at SNHU and sat as Head Senator on Student Government’s Budget and Finance committee, where allocations were argued line by line and reconciled afterwards. Purchase orders and expense reconciliation are familiar ground, not something I would be learning on your time.
 
-Most recently I spent 28 months at Verizon managing business accounts, where I grew the location’s business-segment revenue 4.5 times year over year. That was a sales role and I am deliberately moving out of one. What it gave me was a book of work large enough that only a real system kept it straight.
+At Verizon I managed business accounts, where I grew the location’s business-segment revenue 4.5 times year over year. That was a sales role and I am deliberately moving out of one. What it gave me was a book of work large enough that only a real system kept it straight.
 
 I hold a B.A. in Psychology from SNHU with a 3.7 GPA and three years on the President’s List. I am in Wakefield and available immediately.`,
 
@@ -253,7 +261,7 @@ I live in Wakefield, a weekday schedule is exactly what I want, and I am availab
 
   office: `I would like to be considered for the «ROLE» position at «ORGANISATION».
 
-Five years of coordination work, and the through-line is that I am the person a process runs through. At Southern New Hampshire University I coordinated campus-wide operations — event logistics, departmental budgets, vendor services and fleet scheduling — while finishing a full-time degree and holding a shift-lead job at the same time. At Verizon I managed a B2B account portfolio end to end in Salesforce for 28 months and grew the location’s business-segment revenue 4.5 times year over year.
+Five years of coordination work, and the through-line is that I am the person a process runs through. At Southern New Hampshire University I coordinated campus-wide operations — event logistics, departmental budgets, vendor services and fleet scheduling — while finishing a full-time degree and holding a shift-lead job at the same time. At Verizon I managed a B2B account portfolio end to end in Salesforce and grew the location’s business-segment revenue 4.5 times year over year.
 
 What I am good at is reading how an organisation actually works and then working inside it rather than around it. I pick up a new system in about a week. I keep records because I have been on the wrong end of somebody else not keeping them. And I am comfortable with the parts of a job most people find tedious — forms, filing, reconciliation, the compliance paragraph nobody reads — which I understand is a large part of what this role is.
 
@@ -263,7 +271,7 @@ I hold a B.A. in Psychology and IBM certificates in project management and data 
 
 Records, accountability and a public counter are the three things I have spent five years on. In my Guard unit I hold two additional duties on top of my own: sexual harassment and assault prevention representative, and barracks operations representative. Both are records roles. Both are audited. Both mean knowing precisely what may be disclosed, to whom, and on what timeline — and being the person the public side of it walks up to.
 
-Before that I ran front-desk operations for a university student-affairs office: walk-ins, phones, student records, and knowing what could and could not be released. And 28 months at Verizon managing business accounts, where I handled escalated disputes in person, including from people who arrived angry.
+Before that I ran front-desk operations for a university student-affairs office: walk-ins, phones, student records, and knowing what could and could not be released. And a spell at Verizon managing business accounts, where I handled escalated disputes in person, including from people who arrived angry.
 
 I am genuinely untroubled by bureaucracy. A documented process I can learn and follow is the environment I do my best work in, and I would rather have one than not.
 
@@ -273,9 +281,9 @@ I am a U.S. citizen, currently in the Officer Candidate School pipeline, and wil
 
 I write, and I finish things. Eight products and twelve standalone builds shipped since May, self-taught, designed end to end including the interface copy and the documentation. Before that, prevention training delivered to a Guard company — material that had to be clear to people who did not want to be in the room — and account documentation a whole Verizon location worked from.
 
-The operations half is real too. Eighteen months running operations for a university student-affairs office: events from booking through setup, staffing and teardown, plus vendor coordination and the budget behind them. Creative work at an institution is mostly logistics wearing a nicer jacket, and I have done the logistics.
+The operations half is real too. I ran operations for a university student-affairs office: events from booking through setup, staffing and teardown, plus vendor coordination and the budget behind them. Creative work at an institution is mostly logistics wearing a nicer jacket, and I have done the logistics.
 
-Most recently 28 months at Verizon managing business accounts, where I grew business-segment revenue 4.5 times year over year. I am moving out of sales deliberately. What it left me with is the habit of writing for someone who has thirty seconds.
+At Verizon I managed business accounts and grew business-segment revenue 4.5 times year over year. I am moving out of sales deliberately. What it left me with is the habit of writing for someone who has thirty seconds.
 
 B.A. Psychology, 3.7 GPA. Portfolio at seanjoudrie.github.io/SeanJoudrie. I am in Wakefield and available immediately.`,
 
@@ -293,7 +301,7 @@ I am in Wakefield, available immediately, and happy to start at the support tier
 
 I am my Guard unit’s sexual harassment and assault prevention representative. That means being a first point of contact for people disclosing something serious, knowing exactly what I am permitted to do with what I am told, maintaining records and reporting to standard, and delivering prevention training to a 220-person company. It is the work of holding a professional and supportive tone on a difficult day, in a setting where getting it wrong has consequences.
 
-The coordination half I have also done. Eighteen months as operations supervisor in a university student-affairs office — event logistics, departmental budgets, vendor services, and the campus food pantry — and a seat as Head Senator on Student Government’s Budget and Finance committee, where I learned to read a funding process from the inside and explain it to people who needed a decision rather than a policy citation.
+The coordination half I have also done. Operations supervisor in a university student-affairs office — event logistics, departmental budgets, vendor services, and the campus food pantry — and a seat as Head Senator on Student Government’s Budget and Finance committee, where I learned to read a funding process from the inside and explain it to people who needed a decision rather than a policy citation.
 
 My degree is in Psychology. That is not a qualification for this work, but it is the reason I chose it.
 

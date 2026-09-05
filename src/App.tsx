@@ -21,10 +21,11 @@ import type { Job } from './types'
 import { coverLetter, scoreJob, type Verdict } from './lib/claude'
 import { OutcomesView } from './components/Outcomes'
 import { PeopleView, WeekBar } from './components/People'
+import { GovView } from './components/Gov'
 import { captureCtx } from './lib/outcomes'
 import { loadContacts, statsOf, type Person } from './lib/contacts'
 
-type View = 'top' | 'pool' | 'applied' | 'people' | 'outcomes' | 'dupes' | 'docs' | 'settings'
+type View = 'top' | 'gov' | 'pool' | 'applied' | 'people' | 'outcomes' | 'dupes' | 'docs' | 'settings'
 /** Which document is open over the list, if any. */
 type OpenDoc = { pack: Pack; kind: 'resume' | 'letter' }
 type Sort = 'fit' | 'commute' | 'pay' | 'newest' | 'title' | 'gettable'
@@ -245,6 +246,22 @@ export default function App() {
     return buildMatch(pool.map((j) => rank(j, settings.profile, settings.weights, ctx).exact))
   }, [jobs, appliedKeys, settings, ctx])
 
+  /**
+   * Everything public-sector, ranked. The industry table decides what counts
+   * rather than the sector alone: a town library is municipal but classifies as
+   * a library, and it belongs here as much as the town hall does.
+   */
+  const govJobs = useMemo(() => {
+    const pool = runNet(jobs, topBaseline(settings.floorHourly, settings.maxMinutes), appliedKeys, keyOf).jobs
+    const isPublic = (j: Job) =>
+      j.sector === 'gov' ||
+      j.sector === 'municipal' ||
+      ['federal_agency', 'state_agency', 'municipal_town_government', 'courts_judicial_admin', 'public_library', 'postal_service'].includes(
+        industryFor(j, ctx.now).id,
+      )
+    return topJobs(pool.filter(isPublic), settings.profile, settings.weights, { limit: 120, ctx, by: 'score' }).map((e) => ({ job: e.job }))
+  }, [jobs, appliedKeys, settings, ctx])
+
   const best = (() => {
     const pool = runNet(jobs, topBaseline(settings.floorHourly, settings.maxMinutes), appliedKeys, keyOf).jobs
     return topJobs(pool, settings.profile, settings.weights, { limit: 80, ctx, by: topSort })
@@ -303,7 +320,7 @@ export default function App() {
             just as completely. */}
         <div className="px-3 pt-1">
           <nav className="flex flex-wrap gap-x-3 gap-y-1 text-xs">
-            {(['top', 'pool', 'applied', 'people', 'outcomes', 'dupes', 'docs', 'settings'] as View[]).map((v) => (
+            {(['top', 'gov', 'pool', 'applied', 'people', 'outcomes', 'dupes', 'docs', 'settings'] as View[]).map((v) => (
               <button key={v} onClick={() => setView(v)} aria-current={view === v} className="whitespace-nowrap" style={{ color: view === v ? 'var(--accent)' : 'var(--muted)' }}>
                 {v === 'dupes' ? `dupes ${dupes.length}` : v === 'applied' ? `applied ${appliedList.length}` : v}
               </button>
@@ -470,6 +487,24 @@ export default function App() {
           log={applied}
           letters={letters}
           jobsById={byId}
+        />
+      )}
+      {view === 'gov' && (
+        <GovView
+          entries={govJobs}
+          profile={settings.profile}
+          weights={settings.weights}
+          ctx={ctx}
+          matchOf={match}
+          applied={appliedKeys}
+          keyOf={keyOf}
+          descs={descs}
+          expanded={expanded}
+          selected={selected}
+          onToggleExpand={(id) => setExpanded(toggle(expanded, id))}
+          onToggleSelect={(id) => setSelected(toggle(selected, id))}
+          onApply={apply}
+          onDoc={(pack, kind) => setDoc({ pack, kind })}
         />
       )}
       {view === 'people' && <PeopleView list={people} onChange={setPeople} />}
