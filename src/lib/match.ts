@@ -18,7 +18,13 @@
  * and this is a claim about the market.
  */
 
-export type Match = (score: number) => number
+/**
+ * `of` is the tenth shown on a row. `percentile` is the unrounded position,
+ * which the explainer needs: at the top of the list every job is above the
+ * 99th, and "better than 100% of what is in range" is printed on eleven rows
+ * at once.
+ */
+export type Match = ((score: number) => number) & { percentile: (score: number) => number }
 
 /**
  * Ties share a match. Two jobs scoring 6.8 are not distinguishable by the
@@ -26,10 +32,10 @@ export type Match = (score: number) => number
  * does not have — so both take the midpoint of the range they span.
  */
 export function buildMatch(scores: number[]): Match {
-  if (scores.length === 0) return () => 5
+  if (scores.length === 0) return Object.assign(() => 5, { percentile: () => 50 })
   const sorted = [...scores].sort((a, b) => a - b)
   const n = sorted.length
-  return (score: number) => {
+  const rankOf = (score: number) => {
     // First index with a score >= this one, and first strictly greater.
     let lo = 0
     let hi = n
@@ -47,7 +53,9 @@ export function buildMatch(scores: number[]): Match {
       else hi = mid
     }
     const atOrBelow = lo2
-    const midrank = (below + atOrBelow) / 2
-    return Math.round((midrank / n) * 100) / 10
+    return (below + atOrBelow) / 2
   }
+  return Object.assign((score: number) => Math.round((rankOf(score) / n) * 100) / 10, {
+    percentile: (score: number) => (rankOf(score) / n) * 100,
+  })
 }

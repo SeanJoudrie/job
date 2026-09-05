@@ -41,7 +41,7 @@ export function snippet(job: Job, query: string, showCompany = true): string | n
 }
 
 export function JobRow({
-  job, profile, weights, ctx = defaultCtx(), matchOf, applied, selected, expanded, deadReq, onToggleExpand, onToggleSelect, onApply, onDoc, description, query = '', showCompany = true,
+  job, profile, weights, ctx = defaultCtx(), matchOf, place, applied, selected, expanded, deadReq, onToggleExpand, onToggleSelect, onApply, onDoc, description, query = '', showCompany = true,
 }: {
   job: Job
   profile: Profile
@@ -49,6 +49,8 @@ export function JobRow({
   ctx?: Ctx
   /** Where this job sits among everything in range, on a scale of ten. */
   matchOf?: Match
+  /** Position in an already-ordered list. Replaces the percentile when given. */
+  place?: number
   applied: boolean
   selected: boolean
   expanded: boolean
@@ -86,16 +88,29 @@ export function JobRow({
         <button type="button" onClick={onToggleExpand} className="min-w-0 flex-1 text-left" aria-expanded={expanded}>
           <div className="flex items-baseline gap-2">
             {/*
-              The percentile, not the raw score. The score is an average of
-              eleven axes and averages cluster: over the real pool it runs 4.0
-              to 7.7 with more than half of everything between 6 and 7, so two
-              jobs a hundred places apart both read "6.8". The raw figure is
-              still shown when the row is opened, beside the axes that explain
-              it — this is the one that ranks.
+              A percentile on the pool, a position on the Top list.
+              
+              The percentile exists because the raw score is an average of
+              eleven axes and averages cluster: over the pool it runs 4.0 to 7.7
+              with more than half between 6 and 7, so two jobs a hundred places
+              apart both read "6.8". Ranking them against the pool fixed that
+              everywhere except the one place it mattered most. Every job on the
+              Top list is in the top one percent by construction, so eleven rows
+              printed "10.0" — genuinely different jobs, at the 99.96th down to
+              the 99.50th, collapsed by the rounding into the same number. The
+              same bug the percentile was built to fix, at the other end of the
+              scale.
+
+              A position cannot tie and cannot overclaim. It is also the honest
+              answer to what that list is for: which one to do first.
             */}
-            <span className="tabular text-sm font-semibold" style={{ color: placing >= 8 ? 'var(--good)' : placing >= 5 ? 'var(--ink)' : 'var(--muted)' }}>
-              {placing.toFixed(1)}
-            </span>
+            {place !== undefined ? (
+              <span className="tabular text-sm font-semibold" style={{ color: 'var(--muted)' }}>#{place}</span>
+            ) : (
+              <span className="tabular text-sm font-semibold" style={{ color: placing >= 8 ? 'var(--good)' : placing >= 5 ? 'var(--ink)' : 'var(--muted)' }}>
+                {placing.toFixed(1)}
+              </span>
+            )}
             <span className="min-w-0 flex-1 truncate text-sm font-medium">{job.title}</span>
           </div>
           <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs muted">
@@ -124,6 +139,18 @@ export function JobRow({
             {/* Not scored — see lib/perks.ts. Shown because it is the thing
                 that decides between a $27 job here and a $32 job elsewhere. */}
             {job.tuition && <Chip tone="good">tuition paid</Chip>}
+            {/*
+              Winnability, on the row rather than only inside it.
+              
+              It is 20% of the score, so a job can lead the list on pay,
+              commute and industry while being hard to actually get — and the
+              headline number said nothing about that. Reading "#1" beside
+              "gettable 5" with no explanation is indistinguishable from the
+              app contradicting itself.
+            */}
+            {ease.score <= 4
+              ? <Chip tone="bad">hard to get</Chip>
+              : ease.score <= 6 ? <Chip tone="warn">competitive</Chip> : null}
             {industry.id !== 'unclassified' && (
               <Chip tone={industry.excluded ? 'bad' : industry.weight >= 8 ? 'good' : 'plain'}>{industry.label}</Chip>
             )}
@@ -142,7 +169,7 @@ export function JobRow({
               <span className="faint">{ease.why.join(', ') || 'nothing either way'}</span>
             </span>
             <span className="w-full text-[11px] faint">
-              {matchOf ? `better than ${(placing * 10).toFixed(0)}% of what is in range · ` : ''}
+              {matchOf ? `better than ${matchOf.percentile(exact).toFixed(1)}% of what is in range · ` : ''}
               logistics {logistics.toFixed(1)} · overall fit {fit.toFixed(1)}
               {score < fit && ` · scaled to ${score.toFixed(1)} by how winnable it is`}
             </span>

@@ -696,7 +696,7 @@ function TopView({
         the range of what is out there rather than one company&rsquo;s hiring plan.
       </p>
       <ul>
-        {entries.map((e) => (
+        {entries.map((e, i) => (
           <li key={e.job.id}>
             <JobRow
               job={descs[e.job.id] ? { ...e.job, descText: descs[e.job.id] } : e.job}
@@ -704,6 +704,7 @@ function TopView({
               weights={weights}
               ctx={ctx}
               matchOf={matchOf}
+              place={i + 1}
               applied={applied.has(keyOf(e.job))}
               selected={selected.has(e.job.id)}
               expanded={expanded.has(e.job.id)}

@@ -37,13 +37,35 @@ check('the app opens on Top', /Best across every lane/.test(topText))
 // this check. The list was right; the way it was being read was not.
 const topRows = await page.evaluate(() =>
   [...document.querySelectorAll('li:has(> div > input) button[aria-expanded]')].slice(0, 20).map((b) => {
-    const score = Number((b.querySelector('span')?.textContent ?? '').trim())
-    return { score, line: (b.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 80) }
-  }).filter((r) => Number.isFinite(r.score)))
-check('Top lists scored jobs', topRows.length > 5, `${topRows.length} rows`)
-check('and they descend by score', topRows.every((r, i) => i === 0 || topRows[i - 1].score >= r.score),
-  // Every score, not the first six: the break is never in the first six.
-  topRows.map((r) => r.score).join(' '))
+    const head = (b.querySelector('span')?.textContent ?? '').trim()
+    return { place: Number(head.replace('#', '')), line: (b.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 80) }
+  }).filter((r) => Number.isFinite(r.place)))
+check('Top lists ranked jobs', topRows.length > 5, `${topRows.length} rows`)
+check('and they are numbered in order', topRows.every((r, i) => r.place === i + 1),
+  topRows.map((r) => r.place).join(' '))
+
+/*
+ * The complaint this replaced.
+ *
+ * The Top list used to show a percentile, and every job on it is in the top
+ * one percent by construction — so the first eleven rows all printed "10.0".
+ * They were not tied: they ran from the 99.96th to the 99.50th and the
+ * rounding flattened them. A list whose top eleven entries carry the same
+ * number is not ranking anything, which is the exact failure the percentile
+ * was introduced to fix, reappearing at the other end of the scale.
+ */
+check('and no two of them carry the same number', new Set(topRows.map((r) => r.place)).size === topRows.length,
+  `${new Set(topRows.map((r) => r.place)).size} distinct across ${topRows.length} rows`)
+
+/*
+ * Winnability has to be on the row, not only inside it. It is 20% of the
+ * score, so a job can lead on pay, commute and industry while being hard to
+ * actually get — and "#1" beside a gettability of 5, with nothing saying so,
+ * reads as the app contradicting itself.
+ */
+const winnability = await page.locator('main').innerText()
+check('a hard-to-win job says so without being opened', /hard to get|competitive/.test(winnability),
+  (winnability.match(/hard to get|competitive/g) ?? []).length + ' flagged in the top list')
 
 // One employer posting a role once per shift must not own the list.
 // Read the employer from the row's own meta line. An earlier version matched
@@ -356,7 +378,9 @@ check('including the logistics the case file leads with',
   /Pay/.test(open) && /Commute/.test(open) && /Posture/.test(open) && /Hours/.test(open) && /Industry/.test(open))
 // The big number is a placing in the pool, not the raw score — and a number
 // that ranks has to say what it means, or it is just a number.
-check('the ranking number explains what it is', /better than \d+% of what is in range/.test(open),
+// Carries a decimal now: at the top of the pool every job is above the 99th,
+// and rounding printed "better than 100%" on a dozen rows at once.
+check('the ranking number explains what it is', /better than \d+\.\d% of what is in range/.test(open),
   (open.match(/better than[^\n]*/) ?? ['missing'])[0].slice(0, 70))
 check('and the split between them', /logistics [\d.]+ · overall fit [\d.]+/.test(open),
   (open.match(/logistics [^\n]*/) ?? [''])[0])
