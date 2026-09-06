@@ -87,7 +87,8 @@ export function topJobs(
   jobs: Job[],
   profile: Profile,
   weights: Weights,
-  { limit = 60, perEmployer = PER_EMPLOYER, ctx = defaultCtx(), by = 'score' }: { limit?: number; perEmployer?: number; ctx?: Ctx; by?: TopSort } = {},
+  { limit = 60, perEmployer = PER_EMPLOYER, ctx = defaultCtx(), by = 'score', keepUnwinnable = false }:
+    { limit?: number; perEmployer?: number; ctx?: Ctx; by?: TopSort; keepUnwinnable?: boolean } = {},
 ): TopEntry[] {
   const key = KEYS[by]
   const ranked = jobs
@@ -100,7 +101,12 @@ export function topJobs(
     // gettability run at r = -0.76 across this pool — so the first screen of a
     // money sort was a hospital's chief operating officer and four principal
     // engineers. They stay in the pool, where a search can still find them.
-    .filter((r) => r.gettable > IMPOSSIBLE)
+    // `keepUnwinnable` exists for the government section, which pins a posting
+    // he is not permitted to apply for to exactly this floor and then wants to
+    // show it behind a toggle. Without the escape the two mechanisms cancelled:
+    // every closed posting was filtered out here, so the section counted zero
+    // of them and the toggle could never reveal anything.
+    .filter((r) => keepUnwinnable || r.gettable > IMPOSSIBLE)
     .sort((a, b) => b.exact - a.exact)
     // Narrow to what is reachable BEFORE re-ordering, then apply the chosen key.
     .slice(0, by === 'score' ? Infinity : CANDIDATES)

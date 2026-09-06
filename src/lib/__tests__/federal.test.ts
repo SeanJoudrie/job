@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { canApply, isGuardPath, pathWhy } from '../federal'
+import { canApply, isGuardPath, notHisAuthority, pathWhy } from '../federal'
 
 /**
  * Measured on the live pool: of 418 federal postings whose paths could be read,
@@ -34,6 +34,19 @@ describe('whether he can apply at all', () => {
   it('does not treat the veterans path as open to him', () => {
     expect(canApply(['Veterans'])).toBe(false)
     expect(canApply(['Military spouses'])).toBe(false)
+  })
+
+  /**
+   * These sound like they might be his and are not. "Land and base management"
+   * is a reinstatement right for former land-management employees, not a
+   * military path — lumped in with Guard and reserves it inflated "open to the
+   * Guard" from 7 postings to 25 on the live pool.
+   */
+  it('does not mistake a neighbouring authority for a military one', () => {
+    expect(isGuardPath(['Land and base management'])).toBe(false)
+    expect(isGuardPath(['Military spouses'])).toBe(false)
+    expect(canApply(['Land and base management'])).toBe(false)
+    expect(notHisAuthority(['Land and base management'])).toBe(true)
   })
 
   it('does treat Guard and reserve postings as his, because they are', () => {

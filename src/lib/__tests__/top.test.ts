@@ -184,3 +184,24 @@ describe('the unwinnable are not recommendations', () => {
     expect(out[0].job.title).toBe('Program Coordinator')
   })
 })
+
+/**
+ * The government section pins a posting he may not apply for to exactly the
+ * impossible floor, then wants to show it behind a toggle. Without an escape
+ * the two mechanisms cancelled: every closed posting was filtered out here, so
+ * the section counted zero of them and the toggle could never reveal anything.
+ */
+describe('keeping the unwinnable when something downstream wants them', () => {
+  const shut = job({ title: 'Program Analyst', company: 'IRS', sector: 'gov', hiringPaths: ['Internal to an agency'] })
+  const open = job({ title: 'Records Clerk', company: 'IRS', sector: 'gov', hiringPaths: ['Open to the public'] })
+
+  it('drops them by default, because Top is a recommendation', () => {
+    const out = topJobs([shut, open], SEAN, DEFAULT_WEIGHTS, { limit: 10 })
+    expect(out.map((e) => e.job.title)).not.toContain('Program Analyst')
+  })
+
+  it('keeps them when asked', () => {
+    const out = topJobs([shut, open], SEAN, DEFAULT_WEIGHTS, { limit: 10, keepUnwinnable: true })
+    expect(out.map((e) => e.job.title)).toContain('Program Analyst')
+  })
+})

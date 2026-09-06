@@ -30,7 +30,7 @@ const OPEN_TO_HIM = [
  * Dual-status military technician posts require it, which inverts the usual
  * problem: the qualification almost nobody has is the one he does.
  */
-const GUARD = ['national guard', 'reserves', 'military spouses of', 'land and base management']
+const GUARD = ['national guard', 'reserves']
 
 /**
  * Deliberately NOT counted as open to him.
@@ -44,6 +44,18 @@ const GUARD = ['national guard', 'reserves', 'military spouses of', 'land and ba
  */
 export const VETERANS_PATH = 'veterans'
 
+/**
+ * Authorities that sound like they might be his and are not.
+ *
+ * "Land and base management" is a reinstatement right for former land
+ * management agency employees, not a military path — it was lumped in with
+ * Guard and reserves and inflated "open to the Guard" from 7 postings to 25
+ * on the live pool. "Military spouses" is what it says. Both are listed here
+ * rather than merely left out of the open set, so that the next person reading
+ * this file sees they were considered and rejected.
+ */
+const NOT_HIM = ['land and base management', 'military spouses', 'peace corps', 'native americans', 'family of overseas', 'individuals with disabilities', 'senior executives']
+
 const has = (paths: string[], needles: string[]) =>
   paths.some((p) => needles.some((n) => p.toLowerCase().includes(n)))
 
@@ -54,6 +66,11 @@ export function canApply(paths: string[] | undefined): boolean {
   // same way every other unknown is here: left alone rather than guessed at.
   if (!paths || paths.length === 0) return true
   return has(paths, OPEN_TO_HIM) || has(paths, GUARD)
+}
+
+/** Only ever used to keep the list above honest about what it rejected. */
+export function notHisAuthority(paths: string[] | undefined): boolean {
+  return has(paths ?? [], NOT_HIM) && !canApply(paths)
 }
 
 /** Open to him specifically because he is in the Guard. */

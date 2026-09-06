@@ -259,7 +259,7 @@ export default function App() {
       ['federal_agency', 'state_agency', 'municipal_town_government', 'courts_judicial_admin', 'public_library', 'postal_service'].includes(
         industryFor(j, ctx.now).id,
       )
-    return topJobs(pool.filter(isPublic), settings.profile, settings.weights, { limit: 120, ctx, by: 'score' }).map((e) => ({ job: e.job }))
+    return topJobs(pool.filter(isPublic), settings.profile, settings.weights, { limit: 200, ctx, by: 'score', keepUnwinnable: true }).map((e) => ({ job: e.job }))
   }, [jobs, appliedKeys, settings, ctx])
 
   const best = (() => {
