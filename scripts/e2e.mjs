@@ -473,6 +473,21 @@ const govText = await page.locator('main').innerText()
 check('there is a section for government work on its own', /Federal, state, county and town/.test(govText),
   (govText.match(/\d+ in range[^\n]*/) ?? [''])[0])
 check('and it leads with what he can actually apply to', /you can apply to/.test(govText))
+
+/*
+ * The check that would have caught it.
+ *
+ * The hiring path is set from the API and has to survive `enrich`, which
+ * copies fields one at a time and did not copy this one. All 673 federal
+ * postings reached the index with it undefined, so the section reported "0
+ * closed to outsiders" — which reads like good news and was a blind gate.
+ * CI runs a real scan before this, so federal postings are present here even
+ * though a local index has none.
+ */
+const govFederal = Number((govText.match(/(\d+) federal/) ?? [])[1] ?? 0)
+const govStated = Number((govText.match(/(\d+) of the federal ones say/) ?? [])[1] ?? 0)
+check('federal postings arrive knowing who they are open to', govFederal === 0 || govStated > 0,
+  `${govStated} of ${govFederal} federal postings state a hiring path`)
 // The two federal screens a manager never sees. Both were invisible on an
 // ordinary row and both reject before anyone reads a name.
 check('it explains the two screens that reject before a human reads anything',

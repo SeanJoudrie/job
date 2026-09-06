@@ -47,6 +47,7 @@ export function GovView({ entries, profile, weights, ctx, matchOf, applied, keyO
   const closed = entries.filter((e) => !canApply(e.job.hiringPaths))
   const guard = open.filter((e) => isGuardPath(e.job.hiringPaths))
   const federal = entries.filter((e) => e.job.sector === 'gov').length
+  const stated = entries.filter((e) => e.job.hiringPaths?.length).length
   const local = entries.length - federal
   const shown = showClosed ? [...open, ...closed] : open
 
@@ -55,6 +56,14 @@ export function GovView({ entries, profile, weights, ctx, matchOf, applied, keyO
       <div className="space-y-2 border-b line px-3 py-3 text-xs">
         <p className="muted">
           Federal, state, county and town. {entries.length} in range — {federal} federal, {local} state and local.
+          {/* Stated rather than assumed. The eligibility split shipped once
+              reading "0 closed to outsiders" because the field was being
+              dropped between the API and the index, which looks exactly like
+              good news. If this number is 0 while federal is not, the gate is
+              blind and everything below it is guesswork. */}
+          {federal > 0 && (
+            <> {stated} of the federal ones say who they are open to{stated === 0 ? ' — the eligibility split below is unknown, not clear' : ''}.</>
+          )}
         </p>
         <div className="flex flex-wrap gap-2">
           <Chip tone="good">{open.length} you can apply to</Chip>

@@ -126,6 +126,11 @@ function enrich(raw: Raw): Job | null {
       ...(gsGrade !== null ? [gradeRequirement(gsGrade)!] : []),
     ],
     ...(gsGrade !== null ? { gsGrade } : {}),
+    // Who the posting is open to. Copied explicitly because this function
+    // builds the job field by field rather than spreading raw — which is how
+    // it got added at the source, wired into the scoring, shipped, and arrived
+    // in the index as undefined on all 673 federal postings.
+    ...(raw.hiringPaths?.length ? { hiringPaths: raw.hiringPaths } : {}),
     families: classifyFamilies(raw.title, raw.descText, raw.company),
     postedAt: raw.postedAt,
     firstSeen: TODAY,
@@ -300,6 +305,22 @@ async function main() {
   for (const j of odd.slice(0, 5)) console.log(`      ${formatPay(j.pay)}  «${j.pay?.raw}»  ${j.title.slice(0, 40)} | ${j.company}`)
   console.log(`    ${noDesc} with no description at all${noDesc > merged.length * 0.05 ? '  <-- the parsers are blind on these' : ''}`)
   console.log(`    ${noFamily} with no role family`)
+  /*
+   * Federal postings that lost their gate on the way through.
+   *
+   * Both of these are set at the source and both have to survive `enrich`,
+   * which copies fields one at a time. `hiringPaths` did not, and the whole
+   * government section shipped reading "0 closed to outsiders" — correct-
+   * looking, and wrong. A field that silently becomes undefined is exactly the
+   * failure this block exists for.
+   */
+  const federal = merged.filter((j) => j.source === 'usajobs')
+  if (federal.length) {
+    const paths = federal.filter((j) => j.hiringPaths?.length).length
+    const graded = federal.filter((j) => j.gsGrade !== undefined).length
+    console.log(`    ${paths} of ${federal.length} federal postings carry a hiring path` + (paths === 0 ? '  <-- the eligibility gate is blind' : ''))
+    console.log(`    ${graded} of ${federal.length} carry a GS grade`)
+  }
 
   mkdirSync(DIR, { recursive: true })
 

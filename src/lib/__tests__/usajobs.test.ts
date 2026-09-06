@@ -114,3 +114,33 @@ describe('the fields federal postings actually use', () => {
     expect(mapUsaJobs([none])[0].descText).not.toMatch(/must be able to obtain/)
   })
 })
+
+/**
+ * The hiring path has to leave the mapper. It did — and was then dropped by
+ * `enrich`, which builds the job field by field, so all 673 federal postings
+ * reached the index with it undefined and the government section reported
+ * "0 closed to outsiders". This covers the first hop; the scan's data check
+ * and a browser check cover the second, because `enrich` runs `main()` on
+ * import and cannot be reached from a unit test.
+ */
+describe('who the posting is open to', () => {
+  it('comes out of the mapper', () => {
+    const [row] = mapUsaJobs([{
+      MatchedObjectId: '1',
+      MatchedObjectDescriptor: {
+        PositionTitle: 'Program Analyst',
+        PositionURI: 'https://www.usajobs.gov/job/1',
+        UserArea: { Details: { HiringPathDisplay: ['Open to the public', 'Veterans'] } },
+      },
+    }])
+    expect(row.hiringPaths).toEqual(['Open to the public', 'Veterans'])
+  })
+
+  it('is absent rather than empty when the posting says nothing', () => {
+    const [row] = mapUsaJobs([{
+      MatchedObjectId: '2',
+      MatchedObjectDescriptor: { PositionTitle: 'Clerk', PositionURI: 'https://www.usajobs.gov/job/2' },
+    }])
+    expect(row.hiringPaths ?? []).toEqual([])
+  })
+})
