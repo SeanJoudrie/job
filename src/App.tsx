@@ -22,10 +22,12 @@ import { coverLetter, scoreJob, type Verdict } from './lib/claude'
 import { OutcomesView } from './components/Outcomes'
 import { PeopleView, WeekBar } from './components/People'
 import { GovView } from './components/Gov'
+import { FlexibleView } from './components/Flexible'
+import { flexibleJobs } from './lib/remote'
 import { captureCtx } from './lib/outcomes'
 import { loadContacts, statsOf, type Person } from './lib/contacts'
 
-type View = 'top' | 'gov' | 'pool' | 'applied' | 'people' | 'outcomes' | 'dupes' | 'docs' | 'settings'
+type View = 'top' | 'remote' | 'gov' | 'pool' | 'applied' | 'people' | 'outcomes' | 'dupes' | 'docs' | 'settings'
 /** Which document is open over the list, if any. */
 type OpenDoc = { pack: Pack; kind: 'resume' | 'letter' }
 type Sort = 'fit' | 'commute' | 'pay' | 'newest' | 'title' | 'gettable'
@@ -262,6 +264,16 @@ export default function App() {
     return topJobs(pool.filter(isPublic), settings.profile, settings.weights, { limit: 200, ctx, by: 'score', keepUnwinnable: true }).map((e) => ({ job: e.job }))
   }, [jobs, appliedKeys, settings, ctx])
 
+  /**
+   * Remote, hybrid and part-time. Built off the whole pool rather than the
+   * baseline, because the baseline enforces a drive time and the entire point
+   * of a remote job is that there is no drive.
+   */
+  const flexible = useMemo(
+    () => flexibleJobs(jobs.filter((j) => !appliedKeys.has(keyOf(j))), settings.profile, settings.weights, ctx),
+    [jobs, appliedKeys, settings, ctx],
+  )
+
   const best = (() => {
     const pool = runNet(jobs, topBaseline(settings.floorHourly, settings.maxMinutes), appliedKeys, keyOf).jobs
     return topJobs(pool, settings.profile, settings.weights, { limit: 80, ctx, by: topSort })
@@ -320,7 +332,7 @@ export default function App() {
             just as completely. */}
         <div className="px-3 pt-1">
           <nav className="flex flex-wrap gap-x-3 gap-y-1 text-xs">
-            {(['top', 'gov', 'pool', 'applied', 'people', 'outcomes', 'dupes', 'docs', 'settings'] as View[]).map((v) => (
+            {(['top', 'remote', 'gov', 'pool', 'applied', 'people', 'outcomes', 'dupes', 'docs', 'settings'] as View[]).map((v) => (
               <button key={v} onClick={() => setView(v)} aria-current={view === v} className="whitespace-nowrap" style={{ color: view === v ? 'var(--accent)' : 'var(--muted)' }}>
                 {v === 'dupes' ? `dupes ${dupes.length}` : v === 'applied' ? `applied ${appliedList.length}` : v}
               </button>
@@ -487,6 +499,24 @@ export default function App() {
           log={applied}
           letters={letters}
           jobsById={byId}
+        />
+      )}
+      {view === 'remote' && (
+        <FlexibleView
+          jobs={flexible}
+          profile={settings.profile}
+          weights={settings.weights}
+          ctx={ctx}
+          matchOf={match}
+          applied={appliedKeys}
+          keyOf={keyOf}
+          descs={descs}
+          expanded={expanded}
+          selected={selected}
+          onToggleExpand={(id) => setExpanded(toggle(expanded, id))}
+          onToggleSelect={(id) => setSelected(toggle(selected, id))}
+          onApply={apply}
+          onDoc={(pack, kind) => setDoc({ pack, kind })}
         />
       )}
       {view === 'gov' && (

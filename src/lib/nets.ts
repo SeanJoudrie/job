@@ -178,7 +178,11 @@ export const mkRule = (spec: RuleSpec): Rule => ({ id: rid(), enabled: true, ...
  * they outrank everything, then the exclusions that hold regardless of pay.
  */
 const base = (floor: number, maxMinutes = 30): Rule[] => [
-  mkRule({ type: 'commute', maxMinutes, includeRemote: false }),
+  // Remote counts as in range. It was excluded here, which quietly removed 285
+  // postings from the Top list and every lane at once — invisible, because a
+  // job that never appears cannot look wrong. He has since put remote work at
+  // the top of what he wants, so the exclusion is simply false now.
+  mkRule({ type: 'commute', maxMinutes, includeRemote: true }),
   mkRule({ type: 'pay', floorHourly: floor, includeUnlisted: true }),
   // Tier E: insurance, gambling, telemarketing, collections, police and fire,
   // corrections, dispatch, transit, utilities, the trades, kitchens, food
@@ -209,11 +213,12 @@ const base = (floor: number, maxMinutes = 30): Rule[] => [
  * front-line pay rule, and the crossover search that had never been run.
  */
 /**
- * v4 adds the tuition lane. A stored v3 set would never show it — the saved
- * value beats the shipped default, which is exactly the trap this number exists
- * for and has already caught twice.
+ * v4 adds the tuition lane. v5 lets remote work into the baseline, which every
+ * lane is built from — a stored v4 set would keep excluding it. The saved value
+ * beats the shipped default, which is exactly the trap this number exists for
+ * and has already caught twice.
  */
-export const LANES_VERSION = 4
+export const LANES_VERSION = 5
 
 /**
  * The rules the Top list ranks within.

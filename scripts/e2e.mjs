@@ -466,6 +466,26 @@ check('it says how much more is needed before the weights can be judged', /Not y
 // Nothing was entered, so nothing is claimed about the money.
 check('and shows no runway until a savings figure is entered', !/Take the job|Bridge work now|Review the strategy/.test(outText))
 
+// --- remote and part-time, rated a ten out of ten --------------------------
+await page.getByRole('button', { name: /^remote/ }).click()
+await page.waitForTimeout(700)
+const remText = await page.locator('main').innerText()
+const remoteCount = Number((remText.match(/fully remote\s+(\d+)/) ?? [])[1] ?? 0)
+check('there is a section for remote and part-time work', /Remote, hybrid and part-time/.test(remText),
+  (remText.match(/everything\s+\d+/) ?? [''])[0])
+/*
+ * The baseline used to carry includeRemote:false, which removed every remote
+ * posting from the Top list and from all eighteen lanes at once. Nothing
+ * looked wrong because a job that never appears cannot look wrong.
+ */
+check('and remote postings actually reach it', remoteCount > 0, `${remoteCount} fully remote`)
+// A tab named "remote" opening on a local per-diem shift is the wrong screen,
+// however gettable that shift is.
+const firstChip = (await page.locator('main li span.chip').first().innerText().catch(() => '')).trim()
+check('and it leads with a remote job rather than the easiest local shift', /remote/i.test(firstChip), firstChip || 'no chip')
+check('the technical filter is there, since not being an engineer was the caveat',
+  /career engineer/.test(remText))
+
 // --- government, which does not play by the same rules ---------------------
 await page.getByRole('button', { name: /^gov/ }).click()
 await page.waitForTimeout(600)
